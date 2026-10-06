@@ -188,21 +188,21 @@ export const Dashboard = () => {
   return (
     <div>
       <Navbar />
-      <div className="d-flex">
+      <div className="d-flex min-vh-100">
         <Sidebar />
-        <div className="font-poppins w-100">
-          <div className="bg-body-secondary p-1">
+        <div className="font-poppins w-100 overflow-x-hidden">
+          <div className="bg-body-secondary p-1 small text-truncate">
             Dir : sitrak/{document.URL.split("/").slice(3).join("/") || "dashboard"}
           </div>
 
-          <div className="p-2 p-md-4">
+          <div className="p-2 p-sm-3 p-md-4">
             {/* Header Dashboard */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2 mb-4">
               <div>
-                <h2 className="fw-bold mb-1">
+                <h2 className="fw-bold mb-1 fs-3 fs-md-2">
                   <i className="bi bi-speedometer2 me-2 text-primary"></i>Dashboard Latihan
                 </h2>
-                <p className="text-secondary mb-0">
+                <p className="text-secondary mb-0 small">
                   Ringkasan metrik performa & analitik sesi latihan menembak taktis
                 </p>
               </div>

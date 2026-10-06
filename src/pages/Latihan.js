@@ -25,28 +25,28 @@ export const Latihan = () => {
     return (
         <div>
             <Navbar />
-            <div className="d-flex">
+            <div className="d-flex min-vh-100">
                 <Sidebar />
-                <div className="font-poppins w-100">
-                    <div className="bg-body-secondary p-1">
+                <div className="font-poppins w-100 overflow-x-hidden">
+                    <div className="bg-body-secondary p-1 small text-truncate">
                         Dir : sitrak/{document.URL.split("/").slice(3).join("/") || "latihan"}
                     </div>
 
-                    <div className="p-2 p-md-4">
+                    <div className="p-2 p-sm-3 p-md-4">
                         {/* Header Latihan */}
-                        <div className="d-flex justify-content-between align-items-center mb-4">
-                            <div>
-                                <h2 className="fw-bold mb-1">
+                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
+                            <div className="col">
+                                <h2 className="fw-bold mb-1 fs-3 fs-md-2">
                                     <i className="bi bi-bullseye me-2 text-primary"></i>Sesi Latihan Menembak
                                 </h2>
-                                <p className="text-secondary mb-0">
+                                <p className="text-secondary mb-0 small">
                                     Kelola, pantau real-time, dan mulai sesi latihan menembak taktis
                                 </p>
                             </div>
-                            <div>
+                            <div className="w-100 w-sm-auto col">
                                 <button
                                     type="button"
-                                    className="btn btn-primary px-3 py-2 shadow-sm"
+                                    className="btn btn-primary px-3 py-2 shadow-sm w-100 w-sm-auto"
                                     data-bs-toggle="modal"
                                     data-bs-target="#modalTambahSesi"
                                 >
@@ -138,15 +138,14 @@ export const Latihan = () => {
 
                         {/* Tabel & Daftar Sesi Latihan */}
                         <div className="card border-0 shadow-sm bg-body-tertiary mb-4">
-                            <div className="card-header bg-transparent border-0 pt-3 px-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
-                                <div>
+                            <div className="card-header bg-transparent border-0 pt-3 px-3 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
+                                <div className="col">
                                     <h5 className="fw-bold mb-0">
                                         <i className="bi bi-list-task me-2 text-primary"></i>Daftar Sesi Latihan
                                     </h5>
-                                    <small className="text-secondary">Daftar penugasan dan riwayat sesi latihan penembak</small>
                                 </div>
-                                <div className="d-flex gap-2">
-                                    <div className="input-group input-group-sm" style={{ maxWidth: "260px" }}>
+                                <div className="col d-flex flex-wrap gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
+                                    <div className="input-group input-group-sm flex-grow-1 flex-md-grow-0" style={{ minWidth: "180px", maxWidth: "260px" }}>
                                         <span className="input-group-text bg-body border-end-0">
                                             <i className="bi bi-search text-secondary"></i>
                                         </span>

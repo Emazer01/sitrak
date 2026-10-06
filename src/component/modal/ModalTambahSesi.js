@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
 export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession }) => {
     // 1. Informasi Sesi & Lokasi
@@ -8,8 +9,8 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     // 2. Jumlah Jalur
     const [jumlahJalur, setJumlahJalur] = useState(3);
 
-    // 3. Daftar Master Personel yang Sudah Ada
-    const masterPersonel = [
+    // 3. Daftar Master Personel yang Sudah Ada (Dapat di-fetch dari API /personel)
+    const [masterPersonel, setMasterPersonel] = useState([
         { id: 1, nrp: "219800112", nama: "Lettu Inf. Pratama", pangkat: "Lettu", satuan: "Batalyon A / Tim Alfa" },
         { id: 2, nrp: "219900234", nama: "Serda Budi Santoso", pangkat: "Serda", satuan: "Batalyon B / Tim Bravo" },
         { id: 3, nrp: "219900567", nama: "Praka Dimas Setiawan", pangkat: "Praka", satuan: "Batalyon A / Tim Alfa" },
@@ -18,7 +19,34 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
         { id: 6, nrp: "220300455", nama: "Prada Ilham Maulana", pangkat: "Prada", satuan: "Batalyon B / Tim Alfa" },
         { id: 7, nrp: "219600788", nama: "Serka Ridwan Kamil", pangkat: "Serka", satuan: "Batalyon C / Tim Delta" },
         { id: 8, nrp: "220000312", nama: "Letda Inf. Fajar Nugraha", pangkat: "Letda", satuan: "Batalyon A / Tim Charlie" },
-    ];
+    ]);
+
+    // Opsi Data Dukung Dinamis dari API /atribut
+    const [senjataOptions, setSenjataOptions] = useState([
+        { id_senjata: 1, model_senjata: "Pindad G2 Combat"}
+    ]);
+
+    const [modeOptions, setModeOptions] = useState([
+        { id: 1, nama: "Presisi", ritme: "Slow Fire" },
+        { id: 2, nama: "Reaksi", ritme: "Rapid Fire" },
+        { id: 3, nama: "Double Tap", ritme: "2 Beruntun" },
+        { id: 4, nama: "Penilaian", ritme: "Standar" },
+    ]);
+
+    const [sikapOptions, setSikapOptions] = useState([
+        { id: 1, nama: "Berdiri", kode: "Standing" },
+        { id: 2, nama: "Berlutut", kode: "Kneeling" },
+        { id: 3, nama: "Tiarap", kode: "Prone" },
+        { id: 4, nama: "Kombinasi", kode: "3 Sikap" },
+    ]);
+
+    const [sasaranOptions, setSasaranOptions] = useState([
+        { id: 1, nama: "Bullseye", bentuk: "Lingkaran Konsentris" },
+        { id: 2, nama: "Siluet L1", bentuk: "Badan Penuh" },
+        { id: 3, nama: "Siluet Setengah Badan", bentuk: "Siluet Setengah Badan" },
+        { id: 4, nama: "Plat Baja / Popper", bentuk: "Reaksi" },
+        { id: 5, nama: "Custom", bentuk: "Custom Target" },
+    ]);
 
     // Personel yang dipilih ikut menembak
     const [selectedPersonelIds, setSelectedPersonelIds] = useState([1, 2, 3, 4, 5, 6, 7]);
@@ -32,12 +60,96 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     ]);
 
     // 5. Jenis Senjata (Tanpa Kaliber)
-    const [jenisSenjata, setJenisSenjata] = useState("Pindad SS2-V4");
+    const [jenisSenjata, setJenisSenjata] = useState(senjataOptions[0]?.id_senjata); // Default ke ID senjata pertama dari senjataOptions
 
-    // 6. Jarak, Sikap Menembak, Tipe Sasaran
+    // 6. Mode Tembakan, Jarak, Sikap Menembak, Tipe Sasaran
+    const [modeTembakan, setModeTembakan] = useState("Presisi");
     const [jarakTembak, setJarakTembak] = useState(25);
     const [sikapMenembak, setSikapMenembak] = useState("Berdiri");
     const [tipeSasaran, setTipeSasaran] = useState("Bullseye");
+
+    // Fungsi memanggil API /atribut untuk data dukung modal
+    const getAtribut = async () => {
+        try {
+            const response = await axios.get(
+                `${process.env.REACT_APP_BACKEND_URL}/atribut`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                    },
+                }
+            );
+
+            if (response.status === 200 || response.status == 200) {
+                const atribut = response.data;
+                console.log("Data Atribut Modal Tambah Sesi:", atribut);
+
+                if (atribut.senjata && Array.isArray(atribut.senjata) && atribut.senjata.length > 0) {
+                    setSenjataOptions(atribut.senjata);
+                }
+                if (atribut.mode_tembakan && Array.isArray(atribut.mode_tembakan) && atribut.mode_tembakan.length > 0) {
+                    setModeOptions(atribut.mode_tembakan);
+                }
+                if (atribut.sikap_menembak && Array.isArray(atribut.sikap_menembak) && atribut.sikap_menembak.length > 0) {
+                    setSikapOptions(atribut.sikap_menembak);
+                }
+                if (atribut.tipe_target && Array.isArray(atribut.tipe_target) && atribut.tipe_target.length > 0) {
+                    setSasaranOptions(atribut.tipe_target);
+                }
+            }
+        } catch (error) {
+            console.log("Error mengambil data atribut modal:", error);
+        }
+    };
+
+    // Fungsi memanggil API /personel untuk data dukung personel penembak
+    const getPersonel = async (page = 1, limit = 100, search = "") => {
+        try {
+            let url = `${process.env.REACT_APP_BACKEND_URL}/personel?page=${page}&limit=${limit}`;
+            if (search && search.trim() !== "") {
+                url += `&search=${encodeURIComponent(search.trim())}`;
+            }
+
+            const response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                },
+            });
+
+            if (response.status === 200 || response.status == 200) {
+                const resData = response.data;
+                console.log("Data Personel Modal Tambah Sesi:", resData);
+
+                let rawList = [];
+                if (Array.isArray(resData)) {
+                    rawList = resData;
+                } else if (resData && Array.isArray(resData.data)) {
+                    rawList = resData.data;
+                } else if (resData && Array.isArray(resData.personel)) {
+                    rawList = resData.personel;
+                }
+
+                if (rawList.length > 0) {
+                    const normalized = rawList.map((p, idx) => ({
+                        id: p.id_personel_penembak || p.id || (idx + 1),
+                        nrp: p.nrp,
+                        nama: p.nama_personel_penembak || p.nama,
+                        pangkat: p.pangkat || (p.nama_personel_penembak || p.nama || "").split(" ")[0] || "",
+                        satuan: p.satuan || "-",
+                    }));
+                    setMasterPersonel(normalized);
+                }
+            }
+        } catch (error) {
+            console.log("Error mengambil data personel modal:", error);
+        }
+    };
+
+    // Panggil API saat modal dimuat
+    useEffect(() => {
+        getAtribut();
+        getPersonel(1, 100, "");
+    }, []);
 
     // Perhitungan Jalur & Gelombang Otomatis
     const totalJalurAktif = Math.max(1, parseInt(jumlahJalur) || 1);
@@ -49,9 +161,9 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
             const gelombang = Math.floor(index / totalJalurAktif) + 1;
             const laneNo = (index % totalJalurAktif) + 1;
             return {
-                ...p,
+                id: p.id,
                 gelombang,
-                lane: `Lane ${String(laneNo).padStart(2, "0")}`,
+                lane: laneNo,
             };
         });
 
@@ -146,16 +258,18 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
             babak: babakList,
             totalPeluruPerPersonel,
             senjata: jenisSenjata,
+            modeTembakan,
             jarak: jarakTembak,
             sikap: sikapMenembak,
             sasaran: tipeSasaran,
         };
+        console.log("Data Sesi Latihan yang Siap Dimulai:", sessionData);
 
         if (onStartSession) {
             onStartSession(sessionData);
         } else {
             alert(
-                `Sesi Latihan "${namaSesi}" di ${namaTempatMenembak} siap dimulai dengan ${alokasiPersonel.length} penembak terbagi dalam ${totalGelombang} gelombang pada ${totalJalurAktif} jalur.`
+                `Sesi Latihan "${namaSesi}" (${modeTembakan}) di ${namaTempatMenembak} siap dimulai dengan ${alokasiPersonel.length} penembak terbagi dalam ${totalGelombang} gelombang pada ${totalJalurAktif} jalur.`
             );
         }
     };
@@ -182,7 +296,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                             aria-label="Close"
                         ></button>
                     </div>
-                    <div className="modal-body p-4">
+                    <div className="modal-body p-3 p-md-4">
                         <form id="formSesiLatihan">
                             {/* 1. NAMA SESI & TEMPAT MENEMBAK */}
                             <div className="card border-0 p-3 mb-4">
@@ -332,7 +446,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                                         className={`p-2 rounded-2 border d-flex align-items-center cursor-pointer transition ${
                                                             isSelected
                                                                 ? "border-primary bg-primary-subtle text-primary"
-                                                                : "border-light-subtle text-dark"
+                                                                : "border-light-subtle"
                                                         }`}
                                                         style={{ cursor: "pointer" }}
                                                         onClick={() => togglePersonelSelection(p.id)}
@@ -346,7 +460,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                                         <div className="small text-truncate">
                                                             <div className="fw-bold text-truncate">{p.nama}</div>
                                                             <div className="text-secondary" style={{ fontSize: "11px" }}>
-                                                                NRP: {p.nrp} • {p.pangkat}
+                                                                NRP {p.nrp}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -552,27 +666,49 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                     </label>
                                     <select
                                         className="form-select"
-                                        value={jenisSenjata}
                                         onChange={(e) => setJenisSenjata(e.target.value)}
                                     >
-                                        <option value="Pindad SS2-V4">Pindad SS2-V4 (Senapan Serbu)</option>
-                                        <option value="Pindad G2 Combat">Pindad G2 Combat (Pistol)</option>
-                                        <option value="Pindad G2 Elite">Pindad G2 Elite (Pistol)</option>
-                                        <option value="H&K MP5">H&K MP5 (Submachine Gun)</option>
-                                        <option value="Pindad SPR-3">Pindad SPR-3 (Sniper / SPR)</option>
-                                        <option value="Model Lainnya">Model Lainnya...</option>
+                                        {senjataOptions.map((s, idx) => {
+                                            return (
+                                                <option key={s.id_senjata || idx} value={s.id_senjata}>
+                                                    {s.model_senjata} ({s.kaliber})
+                                                </option>
+                                            );
+                                        })}
+                                        <option value="99">Model Lainnya...</option>
                                     </select>
                                 </div>
                             </div>
 
-                            {/* 6. JARAK, SIKAP MENEMBAK, & TIPE SASARAN */}
+                            {/* 6. MODE TEMBAKAN, JARAK, SIKAP MENEMBAK, & TIPE SASARAN */}
                             <div className="card border-0 p-3">
                                 <h6 className="fw-bold text-primary mb-3">
                                     <i className="bi bi-bullseye me-2"></i>
-                                    6. Jarak, Sikap Menembak, & Tipe Sasaran
+                                    6. Mode Tembakan, Jarak, Sikap Menembak, & Tipe Sasaran
                                 </h6>
                                 <div className="row g-3">
-                                    <div className="col-md-4">
+                                    <div className="col-12 col-sm-6 col-xl-3">
+                                        <label className="form-label fw-semibold">
+                                            Mode Tembakan <span className="text-danger">*</span>
+                                        </label>
+                                        <select
+                                            className="form-select"
+                                            value={modeTembakan}
+                                            onChange={(e) => setModeTembakan(e.target.value)}
+                                        >
+                                            {modeOptions.map((m, idx) => {
+                                                const val = m.nama_mode_tembakan || m.nama || (typeof m === "string" ? m : `Mode ${idx + 1}`);
+                                                const label = typeof m === "object" ? `${val}${m.ritme ? ` (${m.ritme})` : ""}` : m;
+                                                return (
+                                                    <option key={m.id || m.id_mode_tembakan || idx} value={val}>
+                                                        {label}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+
+                                    <div className="col-12 col-sm-6 col-xl-3">
                                         <label className="form-label fw-semibold">
                                             Jarak Tembak <span className="text-danger">*</span>
                                         </label>
@@ -604,7 +740,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                         </div>
                                     </div>
 
-                                    <div className="col-md-4">
+                                    <div className="col-12 col-sm-6 col-xl-3">
                                         <label className="form-label fw-semibold">
                                             Sikap Menembak <span className="text-danger">*</span>
                                         </label>
@@ -613,14 +749,19 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                             value={sikapMenembak}
                                             onChange={(e) => setSikapMenembak(e.target.value)}
                                         >
-                                            <option value="Berdiri">Berdiri (Standing)</option>
-                                            <option value="Berlutut">Berlutut (Kneeling)</option>
-                                            <option value="Tiarap">Tiarap (Prone)</option>
-                                            <option value="Kombinasi">Kombinasi (3 Sikap)</option>
+                                            {sikapOptions.map((sk, idx) => {
+                                                const val = sk.nama_sikap_menembak || sk.nama || (typeof sk === "string" ? sk : `Sikap ${idx + 1}`);
+                                                const label = typeof sk === "object" ? `${val}${sk.kode ? ` (${sk.kode})` : ""}` : sk;
+                                                return (
+                                                    <option key={sk.id || sk.id_sikap_menembak || idx} value={val}>
+                                                        {label}
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
                                     </div>
 
-                                    <div className="col-md-4">
+                                    <div className="col-12 col-sm-6 col-xl-3">
                                         <label className="form-label fw-semibold">
                                             Tipe Sasaran / Target <span className="text-danger">*</span>
                                         </label>
@@ -629,33 +770,38 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                             value={tipeSasaran}
                                             onChange={(e) => setTipeSasaran(e.target.value)}
                                         >
-                                            <option value="Bullseye">Bullseye (Lingkaran Konsentris)</option>
-                                            <option value="Siluet L1">Siluet L1 (Badan Penuh)</option>
-                                            <option value="Siluet Setengah Badan">Siluet Setengah Badan</option>
-                                            <option value="Plat Baja / Popper">Plat Baja / Popper (Reaksi)</option>
-                                            <option value="Custom">Custom Target</option>
+                                            {sasaranOptions.map((ts, idx) => {
+                                                const val = ts.nama_tipe_target || ts.nama || (typeof ts === "string" ? ts : `Target ${idx + 1}`);
+                                                const label = typeof ts === "object" ? `${val}${ts.bentuk ? ` (${ts.bentuk})` : ""}` : ts;
+                                                return (
+                                                    <option key={ts.id || ts.id_tipe_target || idx} value={val}>
+                                                        {label}
+                                                    </option>
+                                                );
+                                            })}
                                         </select>
                                     </div>
                                 </div>
                             </div>
                         </form>
                     </div>
-                    <div className="modal-footer d-flex justify-content-between">
-                        <div className="text-secondary small">
+                    <div className="modal-footer d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-2">
+                        <div className="text-secondary small text-center text-md-start">
                             <i className="bi bi-info-circle me-1"></i>
+                            <span className="badge bg-primary-subtle text-primary me-2">{modeTembakan}</span>
                             {alokasiPersonel.length} Personel • {totalGelombang} Gelombang • {totalJalurAktif} Jalur • {totalPeluruPerPersonel} Butir/Personel ({alokasiPersonel.length * totalPeluruPerPersonel} Total Amunisi)
                         </div>
-                        <div className="d-flex gap-2">
+                        <div className="d-flex justify-content-end gap-2 w-100 w-md-auto">
                             <button
                                 type="button"
-                                className="btn btn-secondary"
+                                className="btn btn-secondary flex-grow-1 flex-md-grow-0"
                                 data-bs-dismiss="modal"
                             >
                                 <i className="bi bi-x-lg me-1"></i> Batal
                             </button>
                             <button
                                 type="button"
-                                className="btn btn-primary shadow-sm"
+                                className="btn btn-primary shadow-sm flex-grow-1 flex-md-grow-0"
                                 disabled={alokasiPersonel.length === 0}
                                 onClick={handleStartSession}
                             >

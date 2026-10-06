@@ -56,11 +56,42 @@ CREATE TABLE IF NOT EXISTS senjata (
     id_jenis_senjata INT NOT NULL,
     kaliber VARCHAR(50) NOT NULL,
     pabrikan VARCHAR(100) DEFAULT 'PT Pindad',
-    kapasitas_magazen INT DEFAULT 30,
     PRIMARY KEY(id_senjata),
     FOREIGN KEY(id_jenis_senjata) REFERENCES jenis_senjata(id_jenis_senjata)
 );
-INSERT INTO senjata(model_senjata, id_jenis_senjata, kaliber, pabrikan, kapasitas_magazen) VALUES 
-    ('Senapan Serbu'),
-    
+INSERT INTO senjata(model_senjata, id_jenis_senjata, kaliber, pabrikan) VALUES 
+    ('Pindad G2 Combat', 2, '9 x 19 mm', 'PT Pindad'),
+    ('Pindad G2 Elite', 2, '9 x 19 mm', 'PT Pindad'),
+    ('Glock 17', 2, '9 x 19 mm', 'Glock GmbH.'),
+    ('Glock 26', 2, '9 x 19 mm', 'Glock GmbH.'),
+    ('Pindad SS2-V4', 1, '5.56 x 45 mm', 'PT Pindad'),
+    ('Pindad SS2-V5', 1, '5.56 x 45 mm', 'PT Pindad'),
+    ('Pindad Pindad SPR-3', 4, '7.62 x 51 mm', 'PT Pindad'),
+    ('H&K MP5', 3, '9 x 19 mm', 'Heckler & Koch')
+;
+
+CREATE TABLE IF NOT EXISTS personel_penembak (
+    id_personel_penembak SERIAL NOT NULL,
+    nrp VARCHAR(30) NOT NULL UNIQUE,
+    nama_personel_penembak VARCHAR(150) NOT NULL,
+    satuan VARCHAR(100) NOT NULL,
+    PRIMARY KEY(id_personel_penembak)
+);
+INSERT INTO personel_penembak(nrp, nama_personel_penembak, satuan) VALUES
+    ('524250', 'Kolonel Lek Kurniawan S., A.Md.', 'Kogabwilhan I'),
+    ('13483/P', 'Kolonel Laut (S) Mufidin, S.T., M.Tr.Opsla.', 'Kogabwilhan I'),
+    ('11030036360882', 'Letkol Inf Tommy Firmansyah', 'Kodam IM'),
+    ('15424/P', 'Letkol Laut (P) Wahyu Hidayanto, M.Han.', 'Kogabwilhan I'),
+    ('13032/P', 'Letkol Laut (KH) Mohamad G. Triatmojo, A.Md., S.A.P., M.Si.', 'Kodiklat TNI'),
+    ('11020015241076', 'Letkol Inf Amir Syarifudin, S.H., M.I.P.', 'Kodam XVIII/Ksw'),
+    ('21930146990972', 'Mayor Cpl (K) Indri Susilowati, A.Md.', 'Kogabwilhan III'),
+    ('11080087540680', 'Mayor Cku Gde Kemal Suryadharma, S.E., M.M.', 'Balitbang Kemhan RI'),
+    ('11619204545150', 'Mayor Pas Moh Agus Priyono, S.T.Han., M.M., M.Han.', 'Yon Parako 465 Pasgat'),
+    ('543193', 'Mayor Pas Rico Falcon Kurniawan, S.T.Han', 'Yon Parako 472 Pasgat'),
+    ('3920204180270', 'Kapten Inf Nurkipin', 'Paspampres'),
+    ('31930705900672', 'Kapten Inf Krisbijantoro', 'Paspampres'),
+    ('210500669400384', 'Kapten Cpl Sunarto, S.T.', 'Kodam II/Swj'),
+    ('24189/P', 'Lettu Laut (T) Akhmad Fathur Rozi', 'Kodiklat TNI'),
+    ('3124104010559961', 'Letda Adm Roisul Umam Mulya Syarif, S.Tr.Han.', 'Lanud Ptm'),
+    ('3225107020561289', 'Letda Sus Gary Ferdinand Wahyudi, S.Kom.', 'Kodau III')
 ;

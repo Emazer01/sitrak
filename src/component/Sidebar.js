@@ -50,16 +50,6 @@ export const Sidebar = () => {
                 </li>
                 <li className="mb-2">
                     <a
-                        href="/riwayat"
-                        id="btn-riwayat"
-                        className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
-                    >
-                        <i className="bi bi-file-earmark-text-fill px-2 text-primary fs-5" />
-                        <span className="fw-medium">Data Personel</span>
-                    </a>
-                </li>
-                <li className="mb-2">
-                    <a
                         href="/pengaturan"
                         id="btn-pengaturan"
                         className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
