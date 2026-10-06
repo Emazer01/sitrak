@@ -1,0 +1,66 @@
+CREATE DATABASE db_sitrak;
+
+#Type
+
+CREATE TYPE status_aktif_enum AS ENUM ('Aktif', 'Nonaktif');
+
+CREATE TYPE status_sesi_enum AS ENUM ('Menunggu', 'Berlangsung', 'Selesai', 'Dibatalkan');
+
+CREATE TYPE kategori_kelulusan_enum AS ENUM ('Istimewa', 'Mahir', 'Cukup', 'Perlu Pembinaan');
+
+#Tabel
+
+CREATE TABLE IF NOT EXISTS tipe_target (
+    id_tipe_target SERIAL NOT NULL,
+    nama_tipe_target VARCHAR(100) NOT NULL,
+    PRIMARY KEY(id_tipe_target)
+);
+INSERT INTO tipe_target(nama_tipe_target) VALUES 
+    ('Bullseye'), 
+    ('Siluet L1'), 
+    ('Siluet Setengah Badan'), 
+    ('Plat Baja / Popper'), 
+    ('Custom')
+;
+
+CREATE TABLE IF NOT EXISTS sikap_menembak (
+    id_sikap_menembak SERIAL NOT NULL,
+    nama_sikap_menembak VARCHAR(100) NOT NULL,
+    PRIMARY KEY(id_sikap_menembak)
+);
+INSERT INTO sikap_menembak(nama_sikap_menembak) VALUES 
+    ('Berdiri'), ('Duduk'), ('Tiarap'), ('Kombinasi')
+;
+
+CREATE TABLE IF NOT EXISTS mode_tembakan (
+    id_mode_tembakan SERIAL NOT NULL,
+    nama_mode_tembakan VARCHAR(100) NOT NULL,
+    PRIMARY KEY(id_mode_tembakan)
+);
+INSERT INTO mode_tembakan(nama_mode_tembakan) VALUES 
+    ('Presisi'), ('Reaksi'), ('Double Tap')
+;
+
+CREATE TABLE IF NOT EXISTS jenis_senjata (
+    id_jenis_senjata SERIAL NOT NULL,
+    nama_jenis_senjata VARCHAR(100) NOT NULL,
+    PRIMARY KEY(id_jenis_senjata)
+);
+INSERT INTO jenis_senjata(nama_jenis_senjata) VALUES 
+    ('Senapan Serbu'), ('Pistol'), ('Submachine Gun'), ('Sniper / SPR'), ('Lainnya')
+;
+
+CREATE TABLE IF NOT EXISTS senjata (
+    id_senjata SERIAL NOT NULL,
+    model_senjata VARCHAR(100) NOT NULL,
+    id_jenis_senjata INT NOT NULL,
+    kaliber VARCHAR(50) NOT NULL,
+    pabrikan VARCHAR(100) DEFAULT 'PT Pindad',
+    kapasitas_magazen INT DEFAULT 30,
+    PRIMARY KEY(id_senjata),
+    FOREIGN KEY(id_jenis_senjata) REFERENCES jenis_senjata(id_jenis_senjata)
+);
+INSERT INTO senjata(model_senjata, id_jenis_senjata, kaliber, pabrikan, kapasitas_magazen) VALUES 
+    ('Senapan Serbu'),
+    
+;

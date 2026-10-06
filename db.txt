@@ -1,0 +1,255 @@
+-- =====================================================================
+-- DATABASE SCHEMA SISTEM INFORMASI TRACKING LATIHAN MENEMBAK (SITRAK)
+-- DBMS: PostgreSQL (v12+)
+-- File: db.txt
+-- =====================================================================
+
+-- Buat database jika belum ada (Jalankan secara terpisah jika menggunakan pgAdmin / psql)
+-- CREATE DATABASE db_sitrak WITH ENCODING 'UTF8';
+-- \c db_sitrak;
+
+-- ---------------------------------------------------------------------
+-- 0. Trigger Function untuk Auto-Update updated_at
+-- ---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ---------------------------------------------------------------------
+-- 1. Custom Enum Types
+-- ---------------------------------------------------------------------
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role_enum') THEN
+        CREATE TYPE user_role_enum AS ENUM ('admin', 'instruktur', 'operator', 'penembak');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'status_aktif_enum') THEN
+        CREATE TYPE status_aktif_enum AS ENUM ('Aktif', 'Nonaktif');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'jenis_kelamin_enum') THEN
+        CREATE TYPE jenis_kelamin_enum AS ENUM ('L', 'P');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kondisi_senjata_enum') THEN
+        CREATE TYPE kondisi_senjata_enum AS ENUM ('baik', 'perawatan', 'rusak');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tipe_target_enum') THEN
+        CREATE TYPE tipe_target_enum AS ENUM (
+            'Lingkaran Konsentris', 
+            'Siluet L1', 
+            'Siluet Setengah Badan', 
+            'Plat Baja / Popper', 
+            'Custom'
+        );
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'sikap_menembak_enum') THEN
+        CREATE TYPE sikap_menembak_enum AS ENUM ('Berdiri', 'Berlutut', 'Tiarap', 'Kombinasi');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'mode_tembakan_enum') THEN
+        CREATE TYPE mode_tembakan_enum AS ENUM ('Presisi', 'Reaksi', 'Double Tap', 'Penilaian');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'status_sesi_enum') THEN
+        CREATE TYPE status_sesi_enum AS ENUM ('menunggu', 'berlangsung', 'selesai', 'dibatalkan');
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'kategori_kelulusan_enum') THEN
+        CREATE TYPE kategori_kelulusan_enum AS ENUM ('Istimewa', 'Mahir', 'Cukup', 'Perlu Pembinaan');
+    END IF;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 2. Tabel: users (Autentikasi & Akun Pengguna)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id_user SERIAL PRIMARY KEY AUTO INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    nama_lengkap VARCHAR(100) NOT NULL,
+    role user_role_enum NOT NULL DEFAULT 'operator',
+    status status_aktif_enum NOT NULL DEFAULT 'aktif',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE TRIGGER trg_users_updated_at
+BEFORE UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------------
+-- 3. Tabel: personel (Data Anggota / Personel Penembak)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS personel (
+    id_personel SERIAL PRIMARY KEY AUTO INCREMENT,
+    nrp VARCHAR(30) NOT NULL UNIQUE,
+    nama_lengkap VARCHAR(100) NOT NULL,
+    pangkat VARCHAR(50) NOT NULL,
+    satuan VARCHAR(100) NOT NULL,
+    status status_aktif_enum DEFAULT 'aktif',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_personel_nrp ON personel(nrp);
+CREATE INDEX IF NOT EXISTS idx_personel_satuan ON personel(satuan);
+
+CREATE OR REPLACE TRIGGER trg_personel_updated_at
+BEFORE UPDATE ON personel
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------------
+-- 4. Tabel: senjata (Master Data Senjata Latihan)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS senjata (
+    id_senjata SERIAL PRIMARY KEY AUTO INCREMENT,
+    kode_senjata VARCHAR(50) NOT NULL UNIQUE,
+    model_senjata VARCHAR(100) NOT NULL,
+    jenis_senjata VARCHAR(50) NOT NULL CHECK (jenis_senjata IN ('Senapan Serbu', 'Pistol', 'Submachine Gun', 'Sniper / SPR', 'Lainnya')),
+    kaliber VARCHAR(50) NOT NULL,
+    pabrikan VARCHAR(100) DEFAULT 'PT Pindad',
+    kapasitas_magazen INT DEFAULT 30,
+    kondisi kondisi_senjata_enum DEFAULT 'baik',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE TRIGGER trg_senjata_updated_at
+BEFORE UPDATE ON senjata
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------------
+-- 5. Tabel: sasaran_target (Master Data Jenis Target / Sasaran Tembak)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sasaran_target (
+    id_target SERIAL PRIMARY KEY,
+    nama_target VARCHAR(100) NOT NULL,
+    tipe_target tipe_target_enum NOT NULL,
+    diameter_cm NUMERIC(6,2) NULL,
+    jumlah_ring INT DEFAULT 10,
+    skor_maksimal INT DEFAULT 100,
+    keterangan TEXT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ---------------------------------------------------------------------
+-- 6. Tabel: sesi_latihan (Informasi Sesi Latihan Menembak)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sesi_latihan (
+    id_sesi SERIAL PRIMARY KEY,
+    kode_sesi VARCHAR(50) NOT NULL UNIQUE,
+    nama_sesi VARCHAR(150) NOT NULL,
+    id_personel INT NOT NULL REFERENCES personel(id_personel) ON UPDATE CASCADE ON DELETE RESTRICT,
+    id_senjata INT NOT NULL REFERENCES senjata(id_senjata) ON UPDATE CASCADE ON DELETE RESTRICT,
+    id_target INT NOT NULL REFERENCES sasaran_target(id_target) ON UPDATE CASCADE ON DELETE RESTRICT,
+    lane_jalur VARCHAR(20) NOT NULL,
+    jarak_meter INT NOT NULL DEFAULT 25,
+    sikap_menembak sikap_menembak_enum DEFAULT 'Berdiri',
+    mode_tembakan mode_tembakan_enum DEFAULT 'Presisi',
+    jumlah_peluru INT NOT NULL DEFAULT 10,
+    timer_detik INT NULL,
+    catatan TEXT NULL,
+    status status_sesi_enum DEFAULT 'menunggu',
+    waktu_mulai TIMESTAMPTZ NULL,
+    waktu_selesai TIMESTAMPTZ NULL,
+    total_skor NUMERIC(6,2) DEFAULT 0.00,
+    akurasi_persen NUMERIC(5,2) DEFAULT 0.00,
+    created_by INT NULL REFERENCES users(id_user) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_sesi_kode ON sesi_latihan(kode_sesi);
+CREATE INDEX IF NOT EXISTS idx_sesi_status ON sesi_latihan(status);
+
+CREATE OR REPLACE TRIGGER trg_sesi_updated_at
+BEFORE UPDATE ON sesi_latihan
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------------
+-- 7. Tabel: detail_tembakan (Tracking Tiap Butir Tembakan / Shot-by-Shot)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS detail_tembakan (
+    id_tembakan BIGSERIAL PRIMARY KEY,
+    id_sesi INT NOT NULL REFERENCES sesi_latihan(id_sesi) ON DELETE CASCADE ON UPDATE CASCADE,
+    shot_number INT NOT NULL,
+    koordinat_x NUMERIC(8,3) NOT NULL,
+    koordinat_y NUMERIC(8,3) NOT NULL,
+    jarak_dari_pusat NUMERIC(8,3) NULL,
+    skor_poin NUMERIC(4,1) NOT NULL DEFAULT 0.0,
+    ring_zona VARCHAR(20) NULL,
+    is_hit BOOLEAN DEFAULT TRUE,
+    split_time_detik NUMERIC(6,3) NULL,
+    elapsed_time_detik NUMERIC(8,3) NULL,
+    waktu_tembak TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON COLUMN detail_tembakan.koordinat_x IS 'Posisi horizontal target (mm / px)';
+COMMENT ON COLUMN detail_tembakan.koordinat_y IS 'Posisi vertikal target (mm / px)';
+COMMENT ON COLUMN detail_tembakan.jarak_dari_pusat IS 'Jarak Euclidean dari pusat bullseye';
+COMMENT ON COLUMN detail_tembakan.skor_poin IS 'Nilai poin tembakan: 10, 9, 8, dst.';
+COMMENT ON COLUMN detail_tembakan.ring_zona IS 'Zona cincin atau zona alfabet A, C, D';
+COMMENT ON COLUMN detail_tembakan.split_time_detik IS 'Interval waktu dari tembakan sebelumnya';
+COMMENT ON COLUMN detail_tembakan.elapsed_time_detik IS 'Total waktu berlalu sejak tembakan pertama';
+
+CREATE INDEX IF NOT EXISTS idx_detail_tembakan_sesi_shot ON detail_tembakan(id_sesi, shot_number);
+
+-- ---------------------------------------------------------------------
+-- 8. Tabel: evaluasi_kemampuan (Penilaian Radar Parameter Personel)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS evaluasi_kemampuan (
+    id_evaluasi SERIAL PRIMARY KEY,
+    id_personel INT NOT NULL REFERENCES personel(id_personel) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_sesi INT NULL REFERENCES sesi_latihan(id_sesi) ON DELETE SET NULL ON UPDATE CASCADE,
+    skor_akurasi_bidik NUMERIC(5,2) DEFAULT 0.00,
+    skor_kecepatan_reaksi NUMERIC(5,2) DEFAULT 0.00,
+    skor_stabilitas_sikap NUMERIC(5,2) DEFAULT 0.00,
+    skor_jarak_jauh NUMERIC(5,2) DEFAULT 0.00,
+    skor_kendali_recoil NUMERIC(5,2) DEFAULT 0.00,
+    skor_konsistensi NUMERIC(5,2) DEFAULT 0.00,
+    nilai_akhir NUMERIC(5,2) DEFAULT 0.00,
+    kategori_kelulusan kategori_kelulusan_enum DEFAULT 'Cukup',
+    catatan_instruktur TEXT NULL,
+    tanggal_evaluasi DATE NOT NULL DEFAULT CURRENT_DATE
+);
+
+-- =====================================================================
+-- DATA AWAL (SEEDING / SAMPLE DATA POSTGRESQL)
+-- =====================================================================
+
+-- Default Users
+INSERT INTO users (username, password_hash, nama_lengkap, role) VALUES
+('admin', '$2y$10$e8w6W2E5p/3F6O59.jXkheQyC0f88y.9tV7wH91F840EaZ42nZc.O', 'Administrator SITRAK', 'admin'),
+('instruktur1', '$2y$10$e8w6W2E5p/3F6O59.jXkheQyC0f88y.9tV7wH91F840EaZ42nZc.O', 'Mayor Inf. Hendra Wijaya', 'instruktur'),
+('operator_lane1', '$2y$10$e8w6W2E5p/3F6O59.jXkheQyC0f88y.9tV7wH91F840EaZ42nZc.O', 'Operator Sistem Lane 1', 'operator');
+
+-- Master Senjata
+INSERT INTO senjata (kode_senjata, model_senjata, jenis_senjata, kaliber, pabrikan, kapasitas_magazen) VALUES
+('WPN-SS2-01', 'Pindad SS2-V4', 'Senapan Serbu', '5.56 x 45 mm', 'PT Pindad', 30),
+('WPN-G2C-02', 'Pindad G2 Combat', 'Pistol', '9 x 19 mm Parabellum', 'PT Pindad', 15),
+('WPN-G2E-03', 'Pindad G2 Elite', 'Pistol', '9 x 19 mm Parabellum', 'PT Pindad', 15),
+('WPN-MP5-04', 'H&K MP5', 'Submachine Gun', '9 x 19 mm Parabellum', 'Heckler & Koch', 30),
+('WPN-SPR-05', 'Pindad SPR-3', 'Sniper / SPR', '7.62 x 51 mm NATO', 'PT Pindad', 10);
+
+-- Master Target
+INSERT INTO sasaran_target (nama_target, tipe_target, diameter_cm, jumlah_ring, skor_maksimal, keterangan) VALUES
+('Target Lingkaran Bullseye 50cm', 'Lingkaran Konsentris', 50.00, 10, 100, 'Target standar tembak presisi 10 cincin konsentris'),
+('Target Siluet Lisan L1', 'Siluet L1', 100.00, 5, 100, 'Target siluet badan standar penilaian militer'),
+('Target Plat Popper Baja', 'Plat Baja / Popper', 30.00, 1, 10, 'Target reaksi jatuh untuk latihan tembak cepat');
+
+-- Data Personel Penembak
+INSERT INTO personel (nrp, nama_lengkap, pangkat, satuan, divisi_regu, jenis_kelamin) VALUES
+('219800112', 'Lettu Inf. Pratama', 'Lettu', 'Batalyon A', 'Tim Alfa', 'L'),
+('219900234', 'Serda Budi Santoso', 'Serda', 'Batalyon B', 'Tim Bravo', 'L'),
+('219900567', 'Praka Dimas Setiawan', 'Praka', 'Batalyon A', 'Tim Alfa', 'L'),
+('220100889', 'Sertu Agus Haryanto', 'Sertu', 'Batalyon C', 'Tim Charlie', 'L');
+
+-- Contoh Sesi Latihan
+INSERT INTO sesi_latihan (kode_sesi, nama_sesi, id_personel, id_senjata, id_target, lane_jalur, jarak_meter, sikap_menembak, mode_tembakan, jumlah_peluru, timer_detik, status, total_skor, akurasi_persen) VALUES
+('SESI-0104', 'Latihan Presisi Gelombang 1', 1, 1, 1, 'Lane 01', 25, 'Berdiri', 'Presisi', 10, 60, 'berlangsung', 89.00, 95.00),
+('SESI-0103', 'Reaksi Rapid Fire', 2, 2, 2, 'Lane 02', 15, 'Berdiri', 'Reaksi', 10, 30, 'berlangsung', 85.00, 90.00),
+('SESI-0102', 'Penilaian 3 Sikap', 3, 1, 1, 'Lane 03', 50, 'Kombinasi', 'Penilaian', 30, 180, 'selesai', 92.00, 96.00);
+
+-- Contoh Evaluasi Kemampuan Personel
+INSERT INTO evaluasi_kemampuan (id_personel, id_sesi, skor_akurasi_bidik, skor_kecepatan_reaksi, skor_stabilitas_sikap, skor_jarak_jauh, skor_kendali_recoil, skor_konsistensi, nilai_akhir, kategori_kelulusan, tanggal_evaluasi) VALUES
+(1, 1, 88.00, 82.00, 85.00, 76.00, 84.00, 89.00, 84.00, 'Mahir', CURRENT_DATE),
+(3, 3, 94.00, 86.00, 92.00, 88.00, 90.00, 93.00, 90.50, 'Istimewa', CURRENT_DATE);
