@@ -1,10 +1,23 @@
 import * as React from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
 import { ModalTambahSesi } from "../component/modal/ModalTambahSesi";
 
 export const Latihan = () => {
     document.title = "Latihan - SITRAK-AI";
+    const navigate = useNavigate();
+
+    // State Sesi Latihan & Pagination
+    const [sesiList, setSesiList] = React.useState([]);
+    const [sesiPage, setSesiPage] = React.useState(1);
+    const [sesiLimit, setSesiLimit] = React.useState(5);
+    const [sesiTotal, setSesiTotal] = React.useState(0);
+    const [sesiTotalPages, setSesiTotalPages] = React.useState(1);
+    const [sesiLoading, setSesiLoading] = React.useState(false);
+    const [searchSesi, setSearchSesi] = React.useState("");
+    const [statusFilter, setStatusFilter] = React.useState("");
 
     React.useEffect(() => {
         document.getElementById("btn-dashboard")?.classList.remove("sidebar-active");
@@ -16,11 +29,140 @@ export const Latihan = () => {
         document.getElementById("nav-btn-latihan")?.classList.add("sidebar-active");
     }, []);
 
+    // Fungsi memanggil API /sesi dengan pagination, filter status, dan pencarian
+    const getSesi = async (page = 1, limit = 5, search = "", status = "") => {
+        setSesiLoading(true);
+        try {
+            let url = `${process.env.REACT_APP_BACKEND_URL}/sesi?page=${page}&limit=${limit}`;
+            if (search && search.trim() !== "") {
+                url += `&search=${encodeURIComponent(search.trim())}`;
+            }
+            if (status && status.trim() !== "") {
+                url += `&status=${encodeURIComponent(status.trim())}`;
+            }
+
+            const response = await axios.get(url, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                },
+            });
+
+            if (response.status === 200 || response.status == 200) {
+                console.log("Response GET /sesi:", response.data);
+                const resData = response.data;
+
+                let list = [];
+                let total = 0;
+                let totalPages = 1;
+
+                if (Array.isArray(resData)) {
+                    list = resData;
+                    total = resData.length;
+                    totalPages = Math.ceil(total / limit) || 1;
+                } else if (resData && Array.isArray(resData.data)) {
+                    list = resData.data;
+                    total =
+                        resData.total !== undefined
+                            ? resData.total
+                            : resData.count !== undefined
+                            ? resData.count
+                            : list.length;
+                    totalPages =
+                        resData.totalPages ||
+                        resData.total_pages ||
+                        Math.ceil(total / limit) ||
+                        1;
+                } else if (resData && Array.isArray(resData.sesi)) {
+                    list = resData.sesi;
+                    total = resData.total !== undefined ? resData.total : list.length;
+                    totalPages =
+                        resData.totalPages ||
+                        resData.total_pages ||
+                        Math.ceil(total / limit) ||
+                        1;
+                }
+
+                if (list.length > 0) {
+                    setSesiList(list);
+                    setSesiTotal(total);
+                    setSesiTotalPages(totalPages);
+                }
+            }
+        } catch (error) {
+            console.error("Gagal mengambil data sesi dari API:", error);
+        } finally {
+            setSesiLoading(false);
+        }
+    };
+
+    // Effect debounce untuk menjalankan getSesi saat page, limit, search, atau status berubah
+    React.useEffect(() => {
+        const delayDebounceFn = setTimeout(() => {
+            getSesi(sesiPage, sesiLimit, searchSesi, statusFilter);
+        }, 300);
+
+        return () => clearTimeout(delayDebounceFn);
+    }, [sesiPage, sesiLimit, searchSesi, statusFilter]);
+
     const handleStartSession = (sessionData) => {
-        alert(
-            `Sesi Latihan "${sessionData.namaSesi}" di ${sessionData.namaTempatMenembak} siap dimulai dengan ${sessionData.personel.length} penembak terbagi dalam ${sessionData.totalGelombang} gelombang pada ${sessionData.jumlahJalur} jalur.`
+        console.log("Sesi latihan baru berhasil dibuat:", sessionData);
+        // Refresh ke halaman pertama agar data sesi terbaru langsung terlihat
+        setSesiPage(1);
+        getSesi(1, sesiLimit, searchSesi, statusFilter);
+    };
+
+    const renderStatusBadge = (status) => {
+        const s = (status || "").toLowerCase();
+        if (s === "berlangsung") {
+            return (
+                <span className="badge bg-success-subtle text-success border border-success">
+                    <i className="bi bi-record-circle me-1"></i>
+                </span>
+            );
+        }
+        if (s === "selesai") {
+            return (
+                <span className="badge bg-secondary-subtle text-secondary border">
+                    <i className="bi bi-check-circle me-1"></i>
+                </span>
+            );
+        }
+        if (s === "menunggu") {
+            return (
+                <span className="badge bg-warning-subtle text-warning border border-warning">
+                    <i className="bi bi-clock me-1"></i>
+                </span>
+            );
+        }
+        if (s === "dibatalkan") {
+            return (
+                <span className="badge bg-danger-subtle text-danger border border-danger">
+                    <i className="bi bi-x-circle me-1"></i>Dibatalkan
+                </span>
+            );
+        }
+        return (
+            <span className="badge bg-light text-dark border">
+                {status || "Menunggu"}
+            </span>
         );
     };
+
+    const formatTanggal = (dateStr) => {
+        if (!dateStr) return "-";
+        try {
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return dateStr;
+            return d.toLocaleDateString("id-ID", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+            });
+        } catch {
+            return dateStr;
+        }
+    };
+
 
     return (
         <div>
@@ -68,8 +210,11 @@ export const Latihan = () => {
                                         </div>
                                         <div>
                                             <small className="text-secondary fw-semibold">Sesi Aktif</small>
-                                            <h4 className="fw-bold mb-0">3 Berlangsung</h4>
+                                            <h4 className="fw-bold mb-0">
+                                                {sesiList.filter((s) => (s.status || "").toLowerCase() === "berlangsung").length} Berlangsung
+                                            </h4>
                                             <small className="text-success">
+
                                                 <i className="bi bi-broadcast me-1"></i>Real-time Tracking
                                             </small>
                                         </div>
@@ -152,12 +297,40 @@ export const Latihan = () => {
                                         <input
                                             type="text"
                                             className="form-control border-start-0"
-                                            placeholder="Cari sesi atau personel..."
+                                            placeholder="Cari sesi atau tempat..."
+                                            value={searchSesi}
+                                            onChange={(e) => {
+                                                setSearchSesi(e.target.value);
+                                                setSesiPage(1);
+                                            }}
                                         />
+                                        {searchSesi && (
+                                            <button
+                                                className="btn btn-outline-secondary border-start-0"
+                                                type="button"
+                                                onClick={() => {
+                                                    setSearchSesi("");
+                                                    setSesiPage(1);
+                                                }}
+                                            >
+                                                <i className="bi bi-x-lg"></i>
+                                            </button>
+                                        )}
                                     </div>
-                                    <button type="button" className="btn btn-sm btn-outline-secondary">
-                                        <i className="bi bi-funnel me-1"></i> Filter
-                                    </button>
+                                    <select
+                                        className="form-select form-select-sm w-auto"
+                                        value={statusFilter}
+                                        onChange={(e) => {
+                                            setStatusFilter(e.target.value);
+                                            setSesiPage(1);
+                                        }}
+                                    >
+                                        <option value="">Semua Status</option>
+                                        <option value="Berlangsung">Berlangsung</option>
+                                        <option value="Menunggu">Menunggu</option>
+                                        <option value="Selesai">Selesai</option>
+                                        <option value="Dibatalkan">Dibatalkan</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -167,119 +340,222 @@ export const Latihan = () => {
                                         <thead className="table-light">
                                             <tr>
                                                 <th>Kode & Sesi</th>
+                                                <th>Tanggal</th>
                                                 <th>Tempat Menembak</th>
                                                 <th>Senjata</th>
                                                 <th>Jarak & Sikap</th>
-                                                <th>Gelombang & Lane</th>
-                                                <th>Status</th>
-                                                <th className="text-end">Aksi</th>
+                                                <th>Detail</th>
+                                                <th>Aksi</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
-                                                <td>
-                                                    <div className="fw-bold">SESI-0104</div>
-                                                    <small className="text-secondary">Latihan Presisi Gelombang 1</small>
-                                                </td>
-                                                <td>
-                                                    <div className="fw-semibold">Lap. Tembak Utama</div>
-                                                    <small className="text-muted">7 Penembak</small>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-secondary-subtle text-secondary">
-                                                        Pindad SS2-V4
-                                                    </span>
-                                                </td>
-                                                <td>25m • Berdiri</td>
-                                                <td>
-                                                    <span className="badge bg-primary-subtle text-primary border border-primary me-1">
-                                                        3 Gelombang
-                                                    </span>
-                                                    <span className="badge bg-light text-dark border">
-                                                        3 Lane
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-success-subtle text-success border border-success">
-                                                        <i className="bi bi-record-circle me-1"></i>Berlangsung
-                                                    </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <button type="button" className="btn btn-sm btn-primary me-1">
-                                                        <i className="bi bi-eye me-1"></i> Pantau
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>
-                                                    <div className="fw-bold">SESI-0103</div>
-                                                    <small className="text-secondary">Reaksi Rapid Fire</small>
-                                                </td>
-                                                <td>
-                                                    <div className="fw-semibold">Lap. Tembak Reaksi</div>
-                                                    <small className="text-muted">4 Penembak</small>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-secondary-subtle text-secondary">
-                                                        Pindad G2 Combat
-                                                    </span>
-                                                </td>
-                                                <td>15m • Berdiri</td>
-                                                <td>
-                                                    <span className="badge bg-primary-subtle text-primary border border-primary me-1">
-                                                        2 Gelombang
-                                                    </span>
-                                                    <span className="badge bg-light text-dark border">
-                                                        2 Lane
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-success-subtle text-success border border-success">
-                                                        <i className="bi bi-record-circle me-1"></i>Berlangsung
-                                                    </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <button type="button" className="btn btn-sm btn-primary me-1">
-                                                        <i className="bi bi-eye me-1"></i> Pantau
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>
-                                                    <div className="fw-bold">SESI-0102</div>
-                                                    <small className="text-secondary">Penilaian 3 Sikap</small>
-                                                </td>
-                                                <td>
-                                                    <div className="fw-semibold">Lap. Tembak 300m</div>
-                                                    <small className="text-muted">6 Penembak</small>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-secondary-subtle text-secondary">
-                                                        Pindad SS2-V4
-                                                    </span>
-                                                </td>
-                                                <td>50m • Kombinasi</td>
-                                                <td>
-                                                    <span className="badge bg-secondary-subtle text-secondary border me-1">
-                                                        2 Gelombang
-                                                    </span>
-                                                    <span className="badge bg-light text-dark border">
-                                                        3 Lane
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className="badge bg-secondary-subtle text-secondary border">
-                                                        Selesai
-                                                    </span>
-                                                </td>
-                                                <td className="text-end">
-                                                    <button type="button" className="btn btn-sm btn-outline-secondary me-1">
-                                                        <i className="bi bi-file-earmark-bar-graph me-1"></i> Hasil
-                                                    </button>
-                                                </td>
-                                            </tr>
+                                            {sesiLoading ? (
+                                                <tr>
+                                                    <td colSpan="8" className="text-center py-4 text-muted">
+                                                        <div className="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                                        Memuat data sesi latihan...
+                                                    </td>
+                                                </tr>
+                                            ) : sesiList.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="8" className="text-center py-4 text-muted">
+                                                        <i className="bi bi-inbox fs-3 d-block mb-1"></i>
+                                                        Tidak ada sesi latihan ditemukan
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                sesiList.map((item, idx) => {
+                                                    const kode =
+                                                        item.kode_sesi ||
+                                                        (item.id_sesi
+                                                            ? `SESI-${String(item.id_sesi).padStart(4, "0")}`
+                                                            : "-");
+                                                    const senjataText =
+                                                        item.model_senjata ||
+                                                        item.nama_senjata ||
+                                                        item.senjata ||
+                                                        "-";
+                                                    const jarakText = item.jarak_meter || item.jarak || 25;
+                                                    const sikapText =
+                                                        item.nama_sikap_menembak ||
+                                                        item.sikap_menembak ||
+                                                        item.sikap ||
+                                                        "Berdiri";
+                                                    const gelombangCount =
+                                                        item.total_gelombang || item.totalGelombang || 1;
+                                                    const laneCount =
+                                                        item.jumlah_jalur || item.jumlahJalur || 1;
+                                                    const isSelesai =
+                                                        (item.status || "").toLowerCase() === "selesai";
+
+                                                    const targetId = item.id_sesi || item.id;
+
+                                                    return (
+                                                        <tr key={item.id_sesi || item.id || idx}>
+                                                            <td>
+                                                                <div
+                                                                    className="fw-bold text-primary"
+                                                                    style={{ cursor: "pointer" }}
+                                                                    onClick={() => navigate(`/latihan/${targetId}`)}
+                                                                    title="Lihat Detail Sesi"
+                                                                >
+                                                                    {kode}
+                                                                </div>
+                                                                <small className="text-secondary">
+                                                                    {item.nama_sesi || item.namaSesi || "Sesi Latihan"}
+                                                                </small>
+                                                            </td>
+                                                            <td>
+                                                                <div className="text-nowrap small fw-medium">
+                                                                    <i className="bi bi-calendar3 me-1 text-primary"></i>
+                                                                    {formatTanggal(item.tanggal || item.created_at)}
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div className="fw-semibold">
+                                                                    {item.nama_tempat_menembak ||
+                                                                        item.namaTempatMenembak ||
+                                                                        "-"}
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <span className="badge bg-secondary-subtle text-secondary">
+                                                                    {senjataText}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                {jarakText}m • {sikapText}
+                                                            </td>
+                                                            <td>
+                                                                <span
+                                                                    className="badge bg-primary-subtle text-primary border border-primary me-1"
+                                                                    title={`${gelombangCount} Gelombang`}
+                                                                >
+                                                                    <i className="bi bi-water me-1"></i>
+                                                                    {gelombangCount}
+                                                                </span>
+                                                                <span
+                                                                    className="badge bg-light text-dark border"
+                                                                    title={`${laneCount} Lane`}
+                                                                >
+                                                                    <i className="bi bi-layout-three-columns me-1"></i>
+                                                                    {laneCount}
+                                                                </span>
+                                                                <span className="ms-1">{renderStatusBadge(item.status)}</span>
+                                                            </td>
+                                                            <td>
+                                                                {isSelesai ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-secondary me-1"
+                                                                        onClick={() => navigate(`/latihan/${targetId}`)}
+                                                                        title="Lihat Rekap Hasil Sesi"
+                                                                    >
+                                                                        <i className="bi bi-file-earmark-bar-graph me-1"></i> Hasil
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-primary me-1"
+                                                                        onClick={() => navigate(`/latihan/${targetId}`)}
+                                                                        title="Pantau Jalannya Sesi Latihan"
+                                                                    >
+                                                                        <i className="bi bi-eye me-1"></i> Pantau
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })
+                                            )}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+
+                            {/* Pagination Footer */}
+                            <div className="card-footer bg-transparent border-0 px-3 py-3 d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2">
+                                <div className="small text-muted">
+                                    {sesiTotal > 0 ? (
+                                        <>
+                                            Menampilkan{" "}
+                                            <span className="fw-bold text-body">
+                                                {(sesiPage - 1) * sesiLimit + 1}
+                                            </span>{" "}
+                                            -{" "}
+                                            <span className="fw-bold text-body">
+                                                {Math.min(sesiPage * sesiLimit, sesiTotal)}
+                                            </span>{" "}
+                                            dari{" "}
+                                            <span className="fw-bold text-body">{sesiTotal}</span> sesi
+                                        </>
+                                    ) : (
+                                        "Tidak ada data sesi"
+                                    )}
+                                </div>
+
+                                <div className="d-flex align-items-center gap-2">
+                                    <select
+                                        className="form-select form-select-sm"
+                                        style={{ width: "auto" }}
+                                        value={sesiLimit}
+                                        onChange={(e) => {
+                                            setSesiLimit(parseInt(e.target.value));
+                                            setSesiPage(1);
+                                        }}
+                                    >
+                                        <option value={5}>5 / halaman</option>
+                                        <option value={10}>10 / halaman</option>
+                                        <option value={20}>20 / halaman</option>
+                                    </select>
+
+                                    <nav aria-label="Page navigation">
+                                        <ul className="pagination pagination-sm mb-0">
+                                            <li className={`page-item ${sesiPage <= 1 ? "disabled" : ""}`}>
+                                                <button
+                                                    className="page-link"
+                                                    type="button"
+                                                    onClick={() => setSesiPage((prev) => Math.max(prev - 1, 1))}
+                                                    disabled={sesiPage <= 1 || sesiLoading}
+                                                >
+                                                    <i className="bi bi-chevron-left me-1"></i> Prev
+                                                </button>
+                                            </li>
+
+                                            {Array.from({ length: sesiTotalPages }, (_, i) => i + 1).map((pNum) => (
+                                                <li
+                                                    key={pNum}
+                                                    className={`page-item ${sesiPage === pNum ? "active" : ""}`}
+                                                >
+                                                    <button
+                                                        className="page-link"
+                                                        type="button"
+                                                        onClick={() => setSesiPage(pNum)}
+                                                        disabled={sesiLoading}
+                                                    >
+                                                        {pNum}
+                                                    </button>
+                                                </li>
+                                            ))}
+
+                                            <li
+                                                className={`page-item ${
+                                                    sesiPage >= sesiTotalPages ? "disabled" : ""
+                                                }`}
+                                            >
+                                                <button
+                                                    className="page-link"
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setSesiPage((prev) => Math.min(prev + 1, sesiTotalPages))
+                                                    }
+                                                    disabled={sesiPage >= sesiTotalPages || sesiLoading}
+                                                >
+                                                    Next <i className="bi bi-chevron-right ms-1"></i>
+                                                </button>
+                                            </li>
+                                        </ul>
+                                    </nav>
                                 </div>
                             </div>
                         </div>

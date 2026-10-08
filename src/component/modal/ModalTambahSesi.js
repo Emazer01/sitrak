@@ -3,23 +3,15 @@ import axios from "axios";
 
 export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession }) => {
     // 1. Informasi Sesi & Lokasi
-    const [namaSesi, setNamaSesi] = useState("Latihan Presisi - Gelombang 1");
-    const [namaTempatMenembak, setNamaTempatMenembak] = useState("Lapangan Tembak Utama 100m");
+    const [namaSesi, setNamaSesi] = useState("");
+    const [namaTempatMenembak, setNamaTempatMenembak] = useState("");
+    const [tanggal, setTanggal] = useState(new Date().toISOString().split("T")[0]);
 
     // 2. Jumlah Jalur
     const [jumlahJalur, setJumlahJalur] = useState(3);
 
-    // 3. Daftar Master Personel yang Sudah Ada (Dapat di-fetch dari API /personel)
-    const [masterPersonel, setMasterPersonel] = useState([
-        { id: 1, nrp: "219800112", nama: "Lettu Inf. Pratama", pangkat: "Lettu", satuan: "Batalyon A / Tim Alfa" },
-        { id: 2, nrp: "219900234", nama: "Serda Budi Santoso", pangkat: "Serda", satuan: "Batalyon B / Tim Bravo" },
-        { id: 3, nrp: "219900567", nama: "Praka Dimas Setiawan", pangkat: "Praka", satuan: "Batalyon A / Tim Alfa" },
-        { id: 4, nrp: "220100889", nama: "Sertu Agus Haryanto", pangkat: "Sertu", satuan: "Batalyon C / Tim Charlie" },
-        { id: 5, nrp: "220200101", nama: "Koptu Hendra Gunawan", pangkat: "Koptu", satuan: "Batalyon A / Tim Bravo" },
-        { id: 6, nrp: "220300455", nama: "Prada Ilham Maulana", pangkat: "Prada", satuan: "Batalyon B / Tim Alfa" },
-        { id: 7, nrp: "219600788", nama: "Serka Ridwan Kamil", pangkat: "Serka", satuan: "Batalyon C / Tim Delta" },
-        { id: 8, nrp: "220000312", nama: "Letda Inf. Fajar Nugraha", pangkat: "Letda", satuan: "Batalyon A / Tim Charlie" },
-    ]);
+    // 3. Daftar Master Personel yang Sudah Ada (Di-fetch dari API /personel)
+    const [masterPersonel, setMasterPersonel] = useState([]);
 
     // Opsi Data Dukung Dinamis dari API /atribut
     const [senjataOptions, setSenjataOptions] = useState([
@@ -49,24 +41,25 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     ]);
 
     // Personel yang dipilih ikut menembak
-    const [selectedPersonelIds, setSelectedPersonelIds] = useState([1, 2, 3, 4, 5, 6, 7]);
+    const [selectedPersonelIds, setSelectedPersonelIds] = useState([]);
     const [searchPersonel, setSearchPersonel] = useState("");
 
     // 4. Konfigurasi Babak & Peluru
     const [jumlahBabak, setJumlahBabak] = useState(2);
     const [babakList, setBabakList] = useState([
         { id: 1, nomor: 1, jenis: "Perkenaan (Koreksi)", peluru: 3 },
-        { id: 2, nomor: 2, jenis: "Penilaian", peluru: 10 },
+        { id: 2, nomor: 2, jenis: "Penilaian (Scoring)", peluru: 10 },
     ]);
 
     // 5. Jenis Senjata (Tanpa Kaliber)
     const [jenisSenjata, setJenisSenjata] = useState(senjataOptions[0]?.id_senjata); // Default ke ID senjata pertama dari senjataOptions
 
     // 6. Mode Tembakan, Jarak, Sikap Menembak, Tipe Sasaran
-    const [modeTembakan, setModeTembakan] = useState("Presisi");
+    const [modeTembakan, setModeTembakan] = useState(1);
     const [jarakTembak, setJarakTembak] = useState(25);
-    const [sikapMenembak, setSikapMenembak] = useState("Berdiri");
-    const [tipeSasaran, setTipeSasaran] = useState("Bullseye");
+    const [sikapMenembak, setSikapMenembak] = useState(1);
+    const [tipeSasaran, setTipeSasaran] = useState(1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Fungsi memanggil API /atribut untuk data dukung modal
     const getAtribut = async () => {
@@ -155,19 +148,47 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     const totalJalurAktif = Math.max(1, parseInt(jumlahJalur) || 1);
 
     const alokasiPersonel = selectedPersonelIds
-        .map((id) => masterPersonel.find((p) => p.id === id))
+        .map((id) => masterPersonel.find((p) => p.id === id || p.id_personel_penembak === id))
         .filter(Boolean)
         .map((p, index) => {
             const gelombang = Math.floor(index / totalJalurAktif) + 1;
             const laneNo = (index % totalJalurAktif) + 1;
             return {
-                id: p.id,
-                gelombang,
-                lane: laneNo,
+                id_personel_penembak: p.id_personel_penembak || p.id,
+                nama_personel_penembak: p.nama_personel_penembak || p.nama,
+                nrp: p.nrp || "-",
+                satuan: p.satuan || "-",gelombang,
+                lane: laneNo
             };
         });
 
     const totalGelombang = Math.ceil(alokasiPersonel.length / totalJalurAktif) || 1;
+
+    // State & Handler Accordion Gelombang
+    const [expandedWaves, setExpandedWaves] = useState({});
+
+    const toggleWaveAccordion = (waveNo) => {
+        setExpandedWaves((prev) => ({
+            ...prev,
+            [waveNo]: prev[waveNo] !== undefined ? !prev[waveNo] : false,
+        }));
+    };
+
+    const bukaSemuaGelombang = () => {
+        const allOpen = {};
+        for (let i = 1; i <= totalGelombang; i++) {
+            allOpen[i] = true;
+        }
+        setExpandedWaves(allOpen);
+    };
+
+    const tutupSemuaGelombang = () => {
+        const allClosed = {};
+        for (let i = 1; i <= totalGelombang; i++) {
+            allClosed[i] = false;
+        }
+        setExpandedWaves(allClosed);
+    };
 
     // Toggle pilih personel
     const togglePersonelSelection = (id) => {
@@ -179,7 +200,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     };
 
     const pilihSemuaPersonel = () => {
-        setSelectedPersonelIds(masterPersonel.map((p) => p.id));
+        setSelectedPersonelIds(masterPersonel.map((p) => p.id_personel_penembak || p.id));
     };
 
     const kosongkanPersonel = () => {
@@ -189,9 +210,9 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     // Filter daftar master personel
     const filteredMaster = masterPersonel.filter(
         (p) =>
-            p.nama.toLowerCase().includes(searchPersonel.toLowerCase()) ||
-            p.nrp.includes(searchPersonel) ||
-            p.satuan.toLowerCase().includes(searchPersonel.toLowerCase())
+            (p.nama_personel_penembak || p.nama || "").toLowerCase().includes(searchPersonel.toLowerCase()) ||
+            (p.nrp || "").includes(searchPersonel) ||
+            (p.satuan || "").toLowerCase().includes(searchPersonel.toLowerCase())
     );
 
     // Handler Babak
@@ -230,7 +251,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
             {
                 id: newCount,
                 nomor: newCount,
-                jenis: "Penilaian",
+                jenis: "Penilaian (Scoring)",
                 peluru: 10,
             },
         ]);
@@ -248,29 +269,74 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
         0
     );
 
-    const handleStartSession = () => {
-        const sessionData = {
-            namaSesi,
-            namaTempatMenembak,
-            jumlahJalur: totalJalurAktif,
-            totalGelombang,
-            personel: alokasiPersonel,
-            babak: babakList,
-            totalPeluruPerPersonel,
-            senjata: jenisSenjata,
-            modeTembakan,
-            jarak: jarakTembak,
-            sikap: sikapMenembak,
-            sasaran: tipeSasaran,
-        };
-        console.log("Data Sesi Latihan yang Siap Dimulai:", sessionData);
+    const handleStartSession = async () => {
+        setIsSubmitting(true);
 
-        if (onStartSession) {
-            onStartSession(sessionData);
-        } else {
-            alert(
-                `Sesi Latihan "${namaSesi}" (${modeTembakan}) di ${namaTempatMenembak} siap dimulai dengan ${alokasiPersonel.length} penembak terbagi dalam ${totalGelombang} gelombang pada ${totalJalurAktif} jalur.`
+        const payload = {
+            nama_sesi: namaSesi,
+            nama_tempat_menembak: namaTempatMenembak,
+            tanggal: tanggal,
+            jumlah_jalur: totalJalurAktif,
+            total_gelombang: totalGelombang,
+            jarak_meter: parseInt(jarakTembak) || 25,
+            id_senjata: parseInt(jenisSenjata),
+            id_mode_tembakan: parseInt(modeTembakan),
+            id_sikap_menembak: parseInt(sikapMenembak),
+            id_tipe_target: parseInt(tipeSasaran),
+            status: "Menunggu",
+            personel: alokasiPersonel.map((p) => ({
+                gelombang: p.gelombang,
+                id_personel_penembak: p.id_personel_penembak || p.id,
+                lane: p.lane,
+            })),
+            babak: babakList.map((b) => ({
+                nomor_babak: b.nomor,
+                nama_babak: b.jenis,
+                jumlah_peluru: parseInt(b.peluru) || 0,
+            })),
+            total_peluru_per_personel: totalPeluruPerPersonel,
+        };
+
+        console.log("Mengirim payload data sesi ke /sesi:", payload);
+
+        try {
+            const response = await axios.post(
+                `${process.env.REACT_APP_BACKEND_URL}/sesi`,
+                payload,
+                {
+                    headers: {
+                        Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+                        "Content-Type": "application/json",
+                    },
+                }
             );
+
+            console.log("Respon berhasil simpan sesi:", response.data);
+            alert(`Sesi Latihan "${namaSesi}" berhasil disimpan!`);
+
+            if (onStartSession) {
+                onStartSession(response.data || payload);
+            }
+
+            // Tutup modal secara otomatis jika bootstrap modal tersedia
+            const modalEl = document.getElementById(modalId);
+            if (modalEl && window.bootstrap) {
+                const modalInstance = window.bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+            }
+            window.location.reload();
+        } catch (error) {
+            console.error("Gagal menyimpan sesi ke API:", error);
+            const errorMsg =
+                error.response?.data?.message ||
+                error.response?.data?.error ||
+                error.message ||
+                "Terjadi kesalahan saat menyimpan sesi.";
+            alert(`Gagal menyimpan sesi latihan: ${errorMsg}`);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -305,7 +371,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                     1. Informasi Sesi & Lokasi Lapangan Tembak
                                 </h6>
                                 <div className="row g-3">
-                                    <div className="col-md-6">
+                                    <div className="col-md-5">
                                         <label className="form-label fw-semibold">
                                             Nama Sesi / Kode Latihan <span className="text-danger">*</span>
                                         </label>
@@ -318,7 +384,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                             required
                                         />
                                     </div>
-                                    <div className="col-md-6">
+                                    <div className="col-md-4">
                                         <label className="form-label fw-semibold">
                                             Nama Tempat Menembak / Lapangan <span className="text-danger">*</span>
                                         </label>
@@ -332,6 +398,23 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                                 value={namaTempatMenembak}
                                                 onChange={(e) => setNamaTempatMenembak(e.target.value)}
                                                 placeholder="Contoh: Lapangan Tembak 100m Sudirman"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="col-md-3">
+                                        <label className="form-label fw-semibold">
+                                            Tanggal Latihan <span className="text-danger">*</span>
+                                        </label>
+                                        <div className="input-group">
+                                            <span className="input-group-text">
+                                                <i className="bi bi-calendar-event text-primary"></i>
+                                            </span>
+                                            <input
+                                                type="date"
+                                                className="form-control"
+                                                value={tanggal}
+                                                onChange={(e) => setTanggal(e.target.value)}
                                                 required
                                             />
                                         </div>
@@ -470,71 +553,184 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                     </div>
                                 </div>
 
-                                {/* Tabel Hasil Penentuan Lane & Gelombang Otomatis */}
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                    <label className="form-label fw-semibold mb-0 small">
-                                        Alokasi Gelombang & Jalur Otomatis ({alokasiPersonel.length} Personel Terpilih):
-                                    </label>
-                                    <span className="badge bg-secondary-subtle text-secondary border">
-                                        Sistem Alokasi Otomatis
-                                    </span>
+                                {/* Tabel Hasil Penentuan Lane & Gelombang Otomatis - Format Dropdown / Accordion */}
+                                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <div>
+                                        <label className="form-label fw-bold mb-0 text-dark">
+                                            <i className="bi bi-diagram-3-fill me-2 text-primary"></i>
+                                            Alokasi Gelombang & Jalur Otomatis
+                                        </label>
+                                        <div className="small text-muted">
+                                            Total: <span className="fw-semibold text-primary">{alokasiPersonel.length}</span> Personel terbagi dalam <span className="fw-semibold text-primary">{totalGelombang}</span> Gelombang ({totalJalurAktif} Jalur per Gelombang)
+                                        </div>
+                                    </div>
+                                    <div className="d-flex align-items-center gap-1">
+                                        {totalGelombang > 1 && (
+                                            <>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-xs py-1 px-2 btn-outline-secondary small"
+                                                    style={{ fontSize: "12px" }}
+                                                    onClick={bukaSemuaGelombang}
+                                                    title="Buka semua accordion gelombang"
+                                                >
+                                                    <i className="bi bi-arrows-expand me-1"></i>Buka Semua
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-xs py-1 px-2 btn-outline-secondary small"
+                                                    style={{ fontSize: "12px" }}
+                                                    onClick={tutupSemuaGelombang}
+                                                    title="Tutup semua accordion gelombang"
+                                                >
+                                                    <i className="bi bi-arrows-collapse me-1"></i>Tutup Semua
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {alokasiPersonel.length === 0 ? (
-                                    <div className="alert alert-warning py-2 mb-0 small">
-                                        <i className="bi bi-exclamation-triangle me-1"></i> Belum ada personel yang dipilih. Silakan centang personel di atas.
+                                    <div className="alert alert-warning py-3 mb-0 small text-center">
+                                        <i className="bi bi-exclamation-triangle-fill fs-5 d-block mb-1 text-warning"></i>
+                                        Belum ada personel yang dipilih. Silakan centang personel pada daftar di atas untuk melakukan alokasi gelombang dan jalur secara otomatis.
                                     </div>
                                 ) : (
-                                    <div className="table-responsive  rounded-2 border">
-                                        <table className="table table-sm table-hover align-middle mb-0">
-                                            <thead className="">
-                                                <tr>
-                                                    <th style={{ width: "16%" }}>Gelombang (Otomatis)</th>
-                                                    <th style={{ width: "14%" }}>Jalur (Lane)</th>
-                                                    <th style={{ width: "35%" }}>Nama Personel</th>
-                                                    <th style={{ width: "25%" }}>NRP / Satuan</th>
-                                                    <th style={{ width: "10%" }} className="text-center">Batal</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {alokasiPersonel.map((p) => (
-                                                    <tr key={p.id}>
-                                                        <td>
-                                                            <span
-                                                                className={`badge px-2 py-1 ${
-                                                                    p.gelombang % 3 === 1
-                                                                        ? "bg-primary text-white"
-                                                                        : p.gelombang % 3 === 2
-                                                                        ? "bg-warning text-dark"
-                                                                        : "bg-success text-white"
-                                                                }`}
-                                                            >
-                                                                <i className="bi bi-layers me-1"></i>Gelombang {p.gelombang}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <span className="badge bg-dark-subtle text-secondary border px-2 py-1">
-                                                                {p.lane}
-                                                            </span>
-                                                        </td>
-                                                        <td className="fw-semibold">{p.nama}</td>
-                                                        <td className="small text-secondary">
-                                                            {p.nrp} • {p.satuan}
-                                                        </td>
-                                                        <td className="text-center">
-                                                            <button
-                                                                type="button"
-                                                                className="btn btn-sm btn-link text-danger p-0"
-                                                                onClick={() => togglePersonelSelection(p.id)}
-                                                                title="Hapus dari sesi"
-                                                            >
-                                                                <i className="bi bi-x-circle-fill"></i>
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                    <div className="accordion" id="accordionGelombang">
+                                        {Array.from({ length: totalGelombang }, (_, i) => i + 1).map((gelombangNo) => {
+                                            const penembakGelombang = alokasiPersonel.filter(
+                                                (p) => p.gelombang === gelombangNo
+                                            );
+                                            const sisaJalur = totalJalurAktif - penembakGelombang.length;
+                                            const isExpanded = expandedWaves[gelombangNo] !== false; // Default terbuka
+
+                                            return (
+                                                <div
+                                                    key={gelombangNo}
+                                                    className="accordion-item border rounded-2 mb-2 overflow-hidden shadow-sm"
+                                                >
+                                                    <h2 className="accordion-header" id={`headingGelombang${gelombangNo}`}>
+                                                        <button
+                                                            className={`accordion-button ${isExpanded ? "" : "collapsed"} py-2 px-3 bg-body-tertiary`}
+                                                            type="button"
+                                                            onClick={() => toggleWaveAccordion(gelombangNo)}
+                                                            aria-expanded={isExpanded}
+                                                            aria-controls={`collapseGelombang${gelombangNo}`}
+                                                        >
+                                                            <div className="d-flex flex-wrap justify-content-between align-items-center w-100 me-2 gap-2">
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    <span
+                                                                        className={`badge px-2 py-1 ${
+                                                                            gelombangNo % 3 === 1
+                                                                                ? "bg-primary text-white"
+                                                                                : gelombangNo % 3 === 2
+                                                                                ? "bg-warning text-dark"
+                                                                                : "bg-success text-white"
+                                                                        }`}
+                                                                    >
+                                                                        <i className="bi bi-layers-fill me-1"></i>
+                                                                        GELOMBANG {gelombangNo}
+                                                                    </span>
+                                                                    <span className="fw-semibold small text-body">
+                                                                        {penembakGelombang.length} Penembak
+                                                                    </span>
+                                                                </div>
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    {sisaJalur === 0 ? (
+                                                                        <span className="badge bg-success-subtle text-success border border-success small fw-normal">
+                                                                            <i className="bi bi-check2-circle me-1"></i>
+                                                                            Semua Jalur Terisi ({totalJalurAktif}/{totalJalurAktif})
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="badge bg-warning-subtle text-warning-emphasis border border-warning small fw-normal">
+                                                                            <i className="bi bi-info-circle me-1"></i>
+                                                                            {penembakGelombang.length} Terisi • {sisaJalur} Jalur Kosong
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    </h2>
+
+                                                    {isExpanded && (
+                                                        <div
+                                                            id={`collapseGelombang${gelombangNo}`}
+                                                            className="accordion-collapse collapse show"
+                                                        >
+                                                            <div className="accordion-body p-0">
+                                                                <div className="table-responsive">
+                                                                    <table className="table table-hover align-middle mb-0">
+                                                                        <tbody>
+                                                                            {penembakGelombang.map((p) => (
+                                                                                <tr key={`${gelombangNo}-${p.id}-${p.lane}`}>
+                                                                                    <td>
+                                                                                        <span className="badge bg-dark text-white px-2 py-1 font-monospace">
+                                                                                            <i className="bi bi-crosshair me-1 text-warning"></i>
+                                                                                            {p.laneFormatted || `Lane ${String(p.lane).padStart(2, "0")}`}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <div className="fw-semibold">
+                                                                                            {p.nama_personel_penembak || p.nama}
+                                                                                        </div>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <span className="font-monospace fw-semibold text-primary">
+                                                                                            {p.nrp || "-"}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td>
+                                                                                        <span className="text-secondary small">
+                                                                                            {p.satuan || "-"}
+                                                                                        </span>
+                                                                                    </td>
+                                                                                    <td className="text-center">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn btn-sm btn-link text-danger p-0"
+                                                                                            onClick={() => togglePersonelSelection(p.id)}
+                                                                                            title="Keluarkan dari sesi latihan"
+                                                                                        >
+                                                                                            <i className="bi bi-x-circle-fill fs-6"></i>
+                                                                                        </button>
+                                                                                    </td>
+                                                                                </tr>
+                                                                            ))}
+
+                                                                            {/* Baris Jalur Kosong jika ada pada gelombang terakhir */}
+                                                                            {sisaJalur > 0 &&
+                                                                                Array.from({ length: sisaJalur }, (_, idx) => {
+                                                                                    const emptyLaneNo = penembakGelombang.length + idx + 1;
+                                                                                    return (
+                                                                                        <tr
+                                                                                            key={`empty-${gelombangNo}-${emptyLaneNo}`}
+                                                                                            className="text-muted table-light"
+                                                                                            style={{ opacity: 0.65 }}
+                                                                                        >
+                                                                                            <td>
+                                                                                                <span className="badge bg-secondary-subtle text-secondary border font-monospace px-2 py-1">
+                                                                                                    Lane {String(emptyLaneNo).padStart(2, "0")}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td colSpan="3" className="text-secondary small fst-italic">
+                                                                                                <i className="bi bi-dash-circle me-1"></i>
+                                                                                                (Jalur Kosong / Tidak Digunakan pada Gelombang ini)
+                                                                                            </td>
+                                                                                            <td className="text-center text-muted small">
+                                                                                                -
+                                                                                            </td>
+                                                                                        </tr>
+                                                                                    );
+                                                                                })}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -596,16 +792,10 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                                             }
                                                         >
                                                             <option value="Perkenaan (Koreksi)">
-                                                                Tembak Perkenaan / Koreksi
+                                                                Tembak Perkenaan (Koreksi)
                                                             </option>
-                                                            <option value="Penilaian">
+                                                            <option value="Penilaian (Scoring)">
                                                                 Tembak Penilaian (Scoring)
-                                                            </option>
-                                                            <option value="Pengelompokan">
-                                                                Tembak Pengelompokan (Grouping)
-                                                            </option>
-                                                            <option value="Reaksi / Cepat">
-                                                                Tembak Reaksi / Cepat (Rapid Fire)
                                                             </option>
                                                         </select>
                                                     </td>
@@ -666,7 +856,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                     </label>
                                     <select
                                         className="form-select"
-                                        onChange={(e) => setJenisSenjata(e.target.value)}
+                                        onChange={(e) => setJenisSenjata(parseInt(e.target.value))}
                                     >
                                         {senjataOptions.map((s, idx) => {
                                             return (
@@ -693,15 +883,12 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                         </label>
                                         <select
                                             className="form-select"
-                                            value={modeTembakan}
-                                            onChange={(e) => setModeTembakan(e.target.value)}
+                                            onChange={(e) => setModeTembakan(parseInt(e.target.value))}
                                         >
                                             {modeOptions.map((m, idx) => {
-                                                const val = m.nama_mode_tembakan || m.nama || (typeof m === "string" ? m : `Mode ${idx + 1}`);
-                                                const label = typeof m === "object" ? `${val}${m.ritme ? ` (${m.ritme})` : ""}` : m;
                                                 return (
-                                                    <option key={m.id || m.id_mode_tembakan || idx} value={val}>
-                                                        {label}
+                                                    <option key={m.id_mode_tembakan || idx} value={m.id_mode_tembakan}>
+                                                        {m.nama_mode_tembakan}
                                                     </option>
                                                 );
                                             })}
@@ -717,7 +904,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                                 type="number"
                                                 className="form-control"
                                                 value={jarakTembak}
-                                                onChange={(e) => setJarakTembak(e.target.value)}
+                                                onChange={(e) => setJarakTembak(parseInt(e.target.value))}
                                                 min="5"
                                                 max="1000"
                                             />
@@ -747,14 +934,13 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                         <select
                                             className="form-select"
                                             value={sikapMenembak}
-                                            onChange={(e) => setSikapMenembak(e.target.value)}
+                                            onChange={(e) => setSikapMenembak(parseInt(e.target.value))}
                                         >
                                             {sikapOptions.map((sk, idx) => {
-                                                const val = sk.nama_sikap_menembak || sk.nama || (typeof sk === "string" ? sk : `Sikap ${idx + 1}`);
-                                                const label = typeof sk === "object" ? `${val}${sk.kode ? ` (${sk.kode})` : ""}` : sk;
+                                                const val = sk.id_sikap_menembak
                                                 return (
                                                     <option key={sk.id || sk.id_sikap_menembak || idx} value={val}>
-                                                        {label}
+                                                        {sk.nama_sikap_menembak || sk.nama || sk}
                                                     </option>
                                                 );
                                             })}
@@ -768,14 +954,13 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                         <select
                                             className="form-select"
                                             value={tipeSasaran}
-                                            onChange={(e) => setTipeSasaran(e.target.value)}
+                                            onChange={(e) => setTipeSasaran(parseInt(e.target.value))}
                                         >
                                             {sasaranOptions.map((ts, idx) => {
-                                                const val = ts.nama_tipe_target || ts.nama || (typeof ts === "string" ? ts : `Target ${idx + 1}`);
-                                                const label = typeof ts === "object" ? `${val}${ts.bentuk ? ` (${ts.bentuk})` : ""}` : ts;
+                                                const val = ts.id_tipe_target
                                                 return (
                                                     <option key={ts.id || ts.id_tipe_target || idx} value={val}>
-                                                        {label}
+                                                        {ts.nama_tipe_target || ts.nama || ts}
                                                     </option>
                                                 );
                                             })}
@@ -802,10 +987,23 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                             <button
                                 type="button"
                                 className="btn btn-primary shadow-sm flex-grow-1 flex-md-grow-0"
-                                disabled={alokasiPersonel.length === 0}
+                                disabled={alokasiPersonel.length === 0 || isSubmitting}
                                 onClick={handleStartSession}
                             >
-                                <i className="bi bi-play-fill me-1"></i> Mulai Sesi Latihan
+                                {isSubmitting ? (
+                                    <>
+                                        <span
+                                            className="spinner-border spinner-border-sm me-2"
+                                            role="status"
+                                            aria-hidden="true"
+                                        ></span>
+                                        Menyimpan...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="bi bi-play-fill me-1"></i> Simpan Sesi Latihan
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

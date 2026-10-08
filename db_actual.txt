@@ -8,6 +8,8 @@ CREATE TYPE status_sesi_enum AS ENUM ('Menunggu', 'Berlangsung', 'Selesai', 'Dib
 
 CREATE TYPE kategori_kelulusan_enum AS ENUM ('Istimewa', 'Mahir', 'Cukup', 'Perlu Pembinaan');
 
+CREATE TYPE status_analisis_enum AS ENUM ('Menunggu', 'Diproses', 'Selesai', 'Gagal');
+
 #Tabel
 
 CREATE TABLE IF NOT EXISTS tipe_target (
@@ -95,3 +97,114 @@ INSERT INTO personel_penembak(nrp, nama_personel_penembak, satuan) VALUES
     ('3124104010559961', 'Letda Adm Roisul Umam Mulya Syarif, S.Tr.Han.', 'Lanud Ptm'),
     ('3225107020561289', 'Letda Sus Gary Ferdinand Wahyudi, S.Kom.', 'Kodau III')
 ;
+
+CREATE TABLE IF NOT EXISTS sesi (
+    id_sesi SERIAL NOT NULL,
+    nama_sesi VARCHAR(150) NOT NULL,
+    nama_tempat_menembak VARCHAR(150) NOT NULL,
+    jumlah_jalur INT NOT NULL DEFAULT 1,
+    total_gelombang INT NOT NULL DEFAULT 1,
+    jarak_meter INT NOT NULL DEFAULT 25,
+    id_senjata INT NOT NULL,
+    id_mode_tembakan INT NOT NULL,
+    id_sikap_menembak INT NOT NULL,
+    id_tipe_target INT NOT NULL,
+    tanggal DATE NOT NULL DEFAULT CURRENT_DATE,
+    status status_sesi_enum DEFAULT 'Menunggu',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id_sesi),
+    FOREIGN KEY(id_senjata) REFERENCES senjata(id_senjata),
+    FOREIGN KEY(id_mode_tembakan) REFERENCES mode_tembakan(id_mode_tembakan),
+    FOREIGN KEY(id_sikap_menembak) REFERENCES sikap_menembak(id_sikap_menembak),
+    FOREIGN KEY(id_tipe_target) REFERENCES tipe_target(id_tipe_target)
+);
+INSERT INTO sesi(nama_sesi, nama_tempat_menembak, jumlah_jalur, total_gelombang, jarak_meter, id_senjata, id_mode_tembakan, id_sikap_menembak, id_tipe_target, tanggal, status) VALUES
+    ('Latihan Presisi Gelombang 1', 'Lapangan Tembak Utama', 4, 1, 25, 1, 1, 1, 1, CURRENT_DATE, 'Menunggu')
+;
+
+CREATE TABLE IF NOT EXISTS gelombang (
+    id_gelombang SERIAL NOT NULL,
+    id_sesi INT NOT NULL,
+    nomor_gelombang INT NOT NULL,
+    lane INT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id_gelombang),
+    FOREIGN KEY(id_sesi) REFERENCES sesi(id_sesi) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS babak (
+    id_babak SERIAL NOT NULL,
+    id_gelombang INT NOT NULL,
+    nomor_babak INT NOT NULL,
+    nama_babak VARCHAR(100) NOT NULL,
+    jumlah_peluru INT NOT NULL DEFAULT 10,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id_babak),
+    FOREIGN KEY(id_gelombang) REFERENCES gelombang(id_gelombang) ON DELETE CASCADE
+);
+INSERT INTO babak(id_gelombang, nomor_babak, nama_babak, jumlah_peluru) VALUES
+    (1, 1, 'Perkenaan (Koreksi)', 3),
+    (1, 2, 'Penilaian', 10)
+;
+
+CREATE TABLE IF NOT EXISTS personel_babak (
+    id_personel_babak SERIAL NOT NULL,
+    id_personel_penembak INT NOT NULL,
+    id_babak INT NOT NULL,
+    total_skor NUMERIC(6,2) DEFAULT 0.00,
+    akurasi_persen NUMERIC(5,2) DEFAULT 0.00,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id_personel_babak),
+    FOREIGN KEY(id_personel_penembak) REFERENCES personel_penembak(id_personel_penembak) ON DELETE CASCADE,
+    FOREIGN KEY(id_babak) REFERENCES babak(id_babak) ON DELETE CASCADE
+);
+INSERT INTO personel_babak(id_personel_penembak, id_babak, total_skor, akurasi_persen) VALUES
+    (1, 1, 28.00, 93.33),
+    (1, 2, 89.00, 89.00)
+;
+
+CREATE TABLE IF NOT EXISTS foto_target (
+    id_foto_target SERIAL NOT NULL,
+    id_personel_babak INT NOT NULL,
+    url_foto_asli TEXT NOT NULL,
+    url_foto_teranotasi TEXT NOT NULL,
+    total_peluru_terdeteksi INT DEFAULT 0,
+    total_skor NUMERIC(6,2) DEFAULT 0.00,
+    akurasi_persen NUMERIC(5,2) DEFAULT 0.00,
+    grouping_radius_mm NUMERIC(8,3),
+    center_offset_x_mm NUMERIC(8,3),
+    center_offset_y_mm NUMERIC(8,3),
+    kategori_kelulusan kategori_kelulusan_enum,
+    status_analisis status_analisis_enum DEFAULT 'Menunggu',
+    catatan_analisis TEXT,
+    waktu_unggah TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    waktu_selesai_analisis TIMESTAMPTZ,
+    PRIMARY KEY(id_foto_target),
+    FOREIGN KEY(id_personel_babak) REFERENCES personel_babak(id_personel_babak) ON DELETE CASCADE
+);
+INSERT INTO foto_target(id_personel_babak, url_foto_asli, url_foto_teranotasi, total_peluru_terdeteksi, total_skor, akurasi_persen, grouping_radius_mm, center_offset_x_mm, center_offset_y_mm, kategori_kelulusan, status_analisis) VALUES
+    (1, '/uploads/targets/target_1_babak_1.jpg', '/uploads/targets/annotated_1_babak_1.jpg', 3, 28.00, 93.33, 14.50, 1.20, -0.80, 'Istimewa', 'Selesai')
+;
+
+CREATE TABLE IF NOT EXISTS detail_deteksi_tembakan (
+    id_deteksi_tembakan BIGSERIAL NOT NULL,
+    id_foto_target INT NOT NULL,
+    nomor_tembakan INT NOT NULL,
+    koordinat_x NUMERIC(8,3) NOT NULL,
+    koordinat_y NUMERIC(8,3) NOT NULL,
+    jarak_dari_pusat_mm NUMERIC(8,3),
+    skor_poin NUMERIC(4,1) NOT NULL DEFAULT 0.0,
+    ring_zona VARCHAR(20),
+    confidence_score NUMERIC(5,4) DEFAULT 1.0000,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id_deteksi_tembakan),
+    FOREIGN KEY(id_foto_target) REFERENCES foto_target(id_foto_target) ON DELETE CASCADE
+);
+INSERT INTO detail_deteksi_tembakan(id_foto_target, nomor_tembakan, koordinat_x, koordinat_y, jarak_dari_pusat_mm, skor_poin, ring_zona, confidence_score) VALUES
+    (1, 1, 150.250, 148.100, 5.200, 10.0, '10', 0.9850),
+    (1, 2, 142.800, 153.400, 12.100, 9.0, '9', 0.9620),
+    (1, 3, 155.100, 146.900, 11.400, 9.0, '9', 0.9740)
+;
+
+#ALTER TABLE / MIGRASI
+ALTER TABLE sesi ADD COLUMN IF NOT EXISTS tanggal DATE NOT NULL DEFAULT CURRENT_DATE;
