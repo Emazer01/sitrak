@@ -1,23 +1,122 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ==============================================================================
+# SITRAK (Sistem Informasi Tracking Latihan Menembak) - .gitignore
+# ==============================================================================
 
-# dependencies
+# 1. Dependencies
 /node_modules
 /.pnp
 .pnp.js
 
-# testing
-/coverage
-
-# production
+# 2. Production & Build Outputs
 /build
+/dist
+/out
 
-# misc
-.DS_Store
+# 3. Environment Variables & Credentials
+# Catatan: File .env berisi IP server lokal dan kredensial sensitif.
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+*.env
+!*.env.example
+!.env.example
 
+# 4. Local Database Dumps & Scratch Data
+# Skema & dump database lokal agar tidak terekspos ke repositori publik
+db.txt
+db_actual.txt
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.bak
+*.backup
+
+# 5. Logs & Debugging
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 6. Testing & Coverage
+/coverage
+*.lcov
+.nyc_output
+
+# 7. Caches & Temporary Files
+.eslintcache
+.stylelintcache
+.cache/
+.temp/
+temp/
+tmp/
+
+# 8. Editor & IDE Settings
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# 9. Operating System Files
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# 6. Testing & Coverage
+/coverage
+*.lcov
+.nyc_output
+
+# 7. Caches & Temporary Files
+.eslintcache
+.stylelintcache
+.cache/
+.temp/
+temp/
+tmp/
+
+# 8. Editor & IDE Settings
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*~
+
+# 9. Operating System Files
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
