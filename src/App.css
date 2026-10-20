@@ -60,3 +60,192 @@
   color: #ffffff !important;
   font-weight: 600;
 }
+
+/* Breadcrumb Styling Standard */
+.breadcrumb-item + .breadcrumb-item::before {
+  color: #adb5bd;
+  font-size: 0.75rem;
+  padding: 0 0.4rem;
+}
+.hover-primary {
+  transition: color 0.15s ease-in-out;
+}
+.hover-primary:hover {
+  color: #0d6efd !important;
+}
+
+/* Card & Table Polish */
+.card {
+  transition: box-shadow 0.2s ease-in-out;
+}
+.table > :not(caption) > * > * {
+  padding: 0.65rem 0.75rem;
+}
+.table-hover tbody tr:hover {
+  background-color: rgba(13, 110, 253, 0.035);
+}
+
+/* Footer Dokumen Laporan di Layar Web (Pratinjau) */
+.laporan-cetak-footer {
+  margin-top: 3rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   PRINT STYLES FOR OFFICIAL SITRAK REPORT
+   Memastikan hasil cetak/ekspor PDF berupa dokumen resmi A4 berkualitas tinggi,
+   bukan tangkapan layar antarmuka web atau dialog modal.
+   ========================================================================== */
+@media print {
+  /* Hilangkan seluruh elemen antarmuka sistem web, modal, backdrop, dan navigasi */
+  .no-print,
+  .modal,
+  .modal-dialog,
+  .modal-content,
+  .modal-header,
+  .modal-footer,
+  .modal-backdrop,
+  nav,
+  aside,
+  header,
+  footer:not(.laporan-cetak-footer),
+  .navbar,
+  .sidebar,
+  .breadcrumb,
+  .btn,
+  button,
+  .dropdown,
+  .alert {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Reset body dan html */
+  html,
+  body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Kontainer dokumen resmi SITRAK saat dicetak */
+  #sitrak-print-area,
+  #sitrak-print-area-fallback {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: static !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  /* Lembar dokumen laporan cetak */
+  .laporan-cetak-document {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    padding-bottom: 25px !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  /* Aturan halaman A4 tanpa spasi berlebih di atas, beri margin bawah untuk footer */
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm 14mm 10mm;
+  }
+
+  /* Footer resmi menempel di bagian paling bawah SETIAP halaman cetak */
+  .laporan-cetak-footer {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    background-color: #ffffff !important;
+    border-top: 1px solid #4b5563 !important;
+    padding-top: 4px !important;
+    padding-bottom: 2px !important;
+    font-size: 8pt !important;
+    color: #4b5563 !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    z-index: 99999 !important;
+  }
+
+  /* Table rules saat cetak */
+  .laporan-cetak-document table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background-color: #ffffff !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .laporan-cetak-document .tabel-gelombang-block {
+    display: block !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .laporan-cetak-document .section-block {
+    display: block !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .laporan-cetak-document th,
+  .laporan-cetak-document td {
+    border: 1px solid #374151 !important;
+    color: #111827 !important;
+    padding: 3.5px 5px !important;
+  }
+
+  .laporan-cetak-document thead {
+    display: table-header-group !important;
+  }
+
+  .laporan-cetak-document tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .laporan-cetak-document .section-title {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  .laporan-cetak-document .signature-section {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}

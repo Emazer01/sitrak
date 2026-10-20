@@ -2,6 +2,7 @@ import * as React from "react";
 import axios from "axios";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
+import { Breadcrumb } from "../component/Breadcrumb";
 
 export const Pengaturan = () => {
   document.title = "Pengaturan Parameter - SITRAK-AI";
@@ -494,10 +495,18 @@ export const Pengaturan = () => {
       <div className="d-flex min-vh-100">
         <Sidebar />
         <div className="font-poppins w-100 overflow-x-hidden">
-          <div className="bg-body-secondary p-1 small text-truncate">
-            Dir : sitrak/
-            {document.URL.split("/").slice(3).join("/") || "pengaturan"}
-          </div>
+          {/* Breadcrumb Path Bar Terstandarisasi */}
+          <Breadcrumb
+            items={[
+              { label: "Pengaturan & Parameter", active: true, icon: "bi bi-gear-fill" },
+            ]}
+            rightContent={
+              <span className="badge bg-body-tertiary text-secondary border px-2 py-1 d-flex align-items-center">
+                <i className="bi bi-sliders text-primary me-1"></i>
+                Data Master & Parameter
+              </span>
+            }
+          />
 
           <div className="p-2 p-sm-3 p-md-4">
             {/* Header Pengaturan */}

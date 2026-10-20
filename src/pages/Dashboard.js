@@ -2,6 +2,7 @@ import * as React from "react";
 import Chart from "chart.js/auto";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
+import { Breadcrumb } from "../component/Breadcrumb";
 
 export const Dashboard = () => {
   const trendChartRef = React.useRef(null);
@@ -191,9 +192,18 @@ export const Dashboard = () => {
       <div className="d-flex min-vh-100">
         <Sidebar />
         <div className="font-poppins w-100 overflow-x-hidden">
-          <div className="bg-body-secondary p-1 small text-truncate">
-            Dir : sitrak/{document.URL.split("/").slice(3).join("/") || "dashboard"}
-          </div>
+          {/* Breadcrumb Path Bar Terstandarisasi */}
+          <Breadcrumb
+            items={[
+              { label: "Dashboard", active: true, icon: "bi bi-speedometer2" },
+            ]}
+            rightContent={
+              <span className="badge bg-body-tertiary text-secondary border px-2 py-1 d-flex align-items-center">
+                <i className="bi bi-broadcast text-success me-1"></i>
+                Monitoring Real-time
+              </span>
+            }
+          />
 
           <div className="p-2 p-sm-3 p-md-4">
             {/* Header Dashboard */}

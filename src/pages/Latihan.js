@@ -3,11 +3,28 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
+import { Breadcrumb } from "../component/Breadcrumb";
 import { ModalTambahSesi } from "../component/modal/ModalTambahSesi";
 
 export const Latihan = () => {
     document.title = "Latihan - SITRAK-AI";
     const navigate = useNavigate();
+
+    // Fungsi navigasi ke detail sesi dengan menyimpan ID & index di localStorage
+    const handleNavigateDetail = (item, idx) => {
+        const targetId = item.id_sesi || item.id;
+        if (targetId) {
+            localStorage.setItem("active_sesi_id", String(targetId));
+            localStorage.setItem(
+                "active_sesi_kode",
+                item.kode_sesi || item.kode || `SESI-${targetId}`
+            );
+            if (idx !== undefined) {
+                localStorage.setItem("active_sesi_index", String(idx));
+            }
+        }
+        navigate("/detail-sesi");
+    };
 
     // State Sesi Latihan & Pagination
     const [sesiList, setSesiList] = React.useState([]);
@@ -115,34 +132,34 @@ export const Latihan = () => {
         const s = (status || "").toLowerCase();
         if (s === "berlangsung") {
             return (
-                <span className="badge bg-success-subtle text-success border border-success">
-                    <i className="bi bi-record-circle me-1"></i>
+                <span className="badge bg-success-subtle text-success border border-success px-2 py-1">
+                    <i className="bi bi-record-circle me-1"></i>Berlangsung
                 </span>
             );
         }
         if (s === "selesai") {
             return (
-                <span className="badge bg-secondary-subtle text-secondary border">
-                    <i className="bi bi-check-circle me-1"></i>
+                <span className="badge bg-secondary-subtle text-secondary border px-2 py-1">
+                    <i className="bi bi-check-circle me-1"></i>Selesai
                 </span>
             );
         }
         if (s === "menunggu") {
             return (
-                <span className="badge bg-warning-subtle text-warning border border-warning">
-                    <i className="bi bi-clock me-1"></i>
+                <span className="badge bg-warning-subtle text-warning border border-warning px-2 py-1">
+                    <i className="bi bi-clock me-1"></i>Menunggu
                 </span>
             );
         }
         if (s === "dibatalkan") {
             return (
-                <span className="badge bg-danger-subtle text-danger border border-danger">
+                <span className="badge bg-danger-subtle text-danger border border-danger px-2 py-1">
                     <i className="bi bi-x-circle me-1"></i>Dibatalkan
                 </span>
             );
         }
         return (
-            <span className="badge bg-light text-dark border">
+            <span className="badge bg-light text-dark border px-2 py-1">
                 {status || "Menunggu"}
             </span>
         );
@@ -163,21 +180,29 @@ export const Latihan = () => {
         }
     };
 
-
     return (
         <div>
             <Navbar />
             <div className="d-flex min-vh-100">
                 <Sidebar />
                 <div className="font-poppins w-100 overflow-x-hidden">
-                    <div className="bg-body-secondary p-1 small text-truncate">
-                        Dir : sitrak/{document.URL.split("/").slice(3).join("/") || "latihan"}
-                    </div>
+                    {/* Breadcrumb Path Bar Terstandarisasi */}
+                    <Breadcrumb
+                        items={[
+                            { label: "Sesi Latihan", active: true, icon: "bi bi-bullseye" },
+                        ]}
+                        rightContent={
+                            <span className="badge bg-body-tertiary text-secondary border px-2 py-1 d-flex align-items-center">
+                                <i className="bi bi-database me-1 text-primary"></i>
+                                {sesiTotal || sesiList.length} Sesi Terdata
+                            </span>
+                        }
+                    />
 
                     <div className="p-2 p-sm-3 p-md-4">
                         {/* Header Latihan */}
                         <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-3 mb-4">
-                            <div className="col">
+                            <div>
                                 <h2 className="fw-bold mb-1 fs-3 fs-md-2">
                                     <i className="bi bi-bullseye me-2 text-primary"></i>Sesi Latihan Menembak
                                 </h2>
@@ -185,10 +210,10 @@ export const Latihan = () => {
                                     Kelola, pantau real-time, dan mulai sesi latihan menembak taktis
                                 </p>
                             </div>
-                            <div className="w-100 w-sm-auto col">
+                            <div>
                                 <button
                                     type="button"
-                                    className="btn btn-primary px-3 py-2 shadow-sm w-100 w-sm-auto"
+                                    className="btn btn-primary px-3 py-2 shadow-sm d-flex align-items-center"
                                     data-bs-toggle="modal"
                                     data-bs-target="#modalTambahSesi"
                                 >
@@ -385,10 +410,11 @@ export const Latihan = () => {
                                                         item.total_gelombang || item.totalGelombang || 1;
                                                     const laneCount =
                                                         item.jumlah_jalur || item.jumlahJalur || 1;
-                                                    const isSelesai =
-                                                        (item.status || "").toLowerCase() === "selesai";
-
-                                                    const targetId = item.id_sesi || item.id;
+                                                    const statusLower =
+                                                        (item.status || "").toLowerCase();
+                                                    const isSelesaiOrBatal =
+                                                        statusLower === "selesai" ||
+                                                        statusLower === "dibatalkan";
 
                                                     return (
                                                         <tr key={item.id_sesi || item.id || idx}>
@@ -396,7 +422,7 @@ export const Latihan = () => {
                                                                 <div
                                                                     className="fw-bold text-primary"
                                                                     style={{ cursor: "pointer" }}
-                                                                    onClick={() => navigate(`/latihan/${targetId}`)}
+                                                                    onClick={() => handleNavigateDetail(item, idx)}
                                                                     title="Lihat Detail Sesi"
                                                                 >
                                                                     {kode}
@@ -444,12 +470,32 @@ export const Latihan = () => {
                                                                 <span className="ms-1">{renderStatusBadge(item.status)}</span>
                                                             </td>
                                                             <td>
-                                                                {isSelesai ? (
+                                                                {(item.status || "").toLowerCase() === "berlangsung" && (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn btn-sm btn-outline-warning text-danger me-1"
+                                                                        onClick={() => {
+                                                                            const id = item.id_sesi || item.id;
+                                                                            if (id) {
+                                                                                localStorage.setItem("active_sesi_id", String(id));
+                                                                                localStorage.setItem(
+                                                                                    "active_sesi_kode",
+                                                                                    item.kode_sesi || item.kode || `SESI-${id}`
+                                                                                );
+                                                                            }
+                                                                            navigate("/live-scoring");
+                                                                        }}
+                                                                        title="Buka Papan Nilai Live Scoring Layar Penuh"
+                                                                    >
+                                                                        <i className="bi bi-display me-1 text-danger"></i> Live
+                                                                    </button>
+                                                                )}
+                                                                {isSelesaiOrBatal ? (
                                                                     <button
                                                                         type="button"
                                                                         className="btn btn-sm btn-outline-secondary me-1"
-                                                                        onClick={() => navigate(`/latihan/${targetId}`)}
-                                                                        title="Lihat Rekap Hasil Sesi"
+                                                                        onClick={() => handleNavigateDetail(item, idx)}
+                                                                        title={statusLower === "dibatalkan" ? "Lihat Rekap Sesi Dibatalkan" : "Lihat Rekap Hasil Sesi"}
                                                                     >
                                                                         <i className="bi bi-file-earmark-bar-graph me-1"></i> Hasil
                                                                     </button>
@@ -457,7 +503,7 @@ export const Latihan = () => {
                                                                     <button
                                                                         type="button"
                                                                         className="btn btn-sm btn-primary me-1"
-                                                                        onClick={() => navigate(`/latihan/${targetId}`)}
+                                                                        onClick={() => handleNavigateDetail(item, idx)}
                                                                         title="Pantau Jalannya Sesi Latihan"
                                                                     >
                                                                         <i className="bi bi-eye me-1"></i> Pantau
