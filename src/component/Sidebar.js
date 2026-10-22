@@ -1,4 +1,14 @@
+import { useLocation } from "react-router-dom";
+
 export const Sidebar = () => {
+    const location = useLocation();
+    const pathname = location?.pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+
+    const isDashboardActive = pathname === "/" || pathname === "" || pathname === "/dashboard";
+    const isLatihanActive = pathname.startsWith("/latihan") || pathname.startsWith("/detail-sesi");
+    const isLiveScoringActive = pathname.startsWith("/live-scoring");
+    const isPengaturanActive = pathname.startsWith("/pengaturan");
+
     return (
         <div
             className="d-flex flex-column flex-shrink-0 p-3 bg-dark text-white sidebar shadow sticky-top col-3 col-md-2 d-none d-md-flex border-end border-secondary border-opacity-25"
@@ -32,7 +42,7 @@ export const Sidebar = () => {
                     <a
                         href="/"
                         id="btn-dashboard"
-                        className="sidebar-link sidebar-active p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                        className={`sidebar-link ${isDashboardActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                     >
                         <i className="bi bi-house-door-fill px-2 text-primary fs-5" />
                         <span className="fw-medium">Dashboard</span>
@@ -42,7 +52,7 @@ export const Sidebar = () => {
                     <a
                         href="/latihan"
                         id="btn-latihan"
-                        className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                        className={`sidebar-link ${isLatihanActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                     >
                         <i className="bi bi-bullseye px-2 text-primary fs-5" />
                         <span className="fw-medium">Latihan</span>
@@ -52,7 +62,7 @@ export const Sidebar = () => {
                     <a
                         href="/pengaturan"
                         id="btn-pengaturan"
-                        className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                        className={`sidebar-link ${isPengaturanActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                     >
                         <i className="bi bi-gear-fill px-2 text-primary fs-5" />
                         <span className="fw-medium">Pengaturan</span>

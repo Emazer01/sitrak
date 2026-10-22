@@ -287,10 +287,8 @@ export const Pengaturan = () => {
         },
       })
       .then(function (response) {
-        if (response.status === 200 || response.status == 200) {
+        if (response.status === 200) {
           atribut = response.data;
-          console.log(response.headers);
-          console.log(response.data);
           // Update state berdasarkan data atribut yang didapat (jenis_senjata, mode_tembakan, sikap_menembak, tipe_target, senjata)
           if (atribut.jenis_senjata && Array.isArray(atribut.jenis_senjata)) {
             setJenisSenjataList(atribut.jenis_senjata);
@@ -310,7 +308,7 @@ export const Pengaturan = () => {
         }
       })
       .catch(function (error) {
-        console.log(error);
+        console.error("Error GET /atribut:", error);
       });
     return atribut;
   };
@@ -336,15 +334,13 @@ export const Pengaturan = () => {
           },
         })
         .then(function (response) {
-          if (response.status === 200 || response.status == 200) {
-            console.log("Response GET /personel:", response.data);
+          if (response.status === 200) {
             const resData = response.data;
             personelData = resData;
 
             // Mendukung berbagai bentuk response (array langsung, atau paginated wrapper { data: [...], total: ... })
             if (Array.isArray(resData)) {
               setPersonelList(resData);
-              console.log(resData)
               setPersonelTotal((prev) => Math.max(prev, resData.length));
               setPersonelTotalPages(resData.length >= limit ? page + 1 : page);
             } else if (resData && Array.isArray(resData.data)) {
@@ -379,10 +375,10 @@ export const Pengaturan = () => {
           }
         })
         .catch(function (error) {
-          console.log("Error GET /personel:", error);
+          console.error("Error GET /personel:", error);
         });
     } catch (error) {
-      console.log(error);
+      console.error("Error getPersonel:", error);
     } finally {
       setPersonelLoading(false);
     }

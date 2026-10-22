@@ -1,4 +1,14 @@
+import { useLocation } from "react-router-dom";
+
 export const Navbar = () => {
+    const location = useLocation();
+    const pathname = location?.pathname || (typeof window !== "undefined" ? window.location.pathname : "");
+
+    const isDashboardActive = pathname === "/" || pathname === "" || pathname === "/dashboard";
+    const isLatihanActive = pathname.startsWith("/latihan") || pathname.startsWith("/detail-sesi");
+    const isLiveScoringActive = pathname.startsWith("/live-scoring");
+    const isPengaturanActive = pathname.startsWith("/pengaturan");
+
     return (
         <nav className="navbar navbar-expand-lg bg-dark navbar-dark d-block d-md-none font-poppins sticky-top border-bottom border-secondary border-opacity-25 shadow-sm">
             <div className="container-fluid px-3 py-1">
@@ -41,7 +51,7 @@ export const Navbar = () => {
                             <a
                                 href="/"
                                 id="nav-btn-dashboard"
-                                className="sidebar-link sidebar-active p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                                className={`sidebar-link ${isDashboardActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                             >
                                 <i className="bi bi-house-door-fill px-2 text-primary fs-5" />
                                 <span className="fw-medium">Dashboard</span>
@@ -51,7 +61,7 @@ export const Navbar = () => {
                             <a
                                 href="/latihan"
                                 id="nav-btn-latihan"
-                                className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                                className={`sidebar-link ${isLatihanActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                             >
                                 <i className="bi bi-bullseye px-2 text-primary fs-5" />
                                 <span className="fw-medium">Latihan</span>
@@ -61,7 +71,7 @@ export const Navbar = () => {
                             <a
                                 href="/pengaturan"
                                 id="nav-btn-pengaturan"
-                                className="sidebar-link p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2"
+                                className={`sidebar-link ${isPengaturanActive ? "sidebar-active" : ""} p-2 text-decoration-none font-poppins d-flex align-items-center rounded-2`}
                             >
                                 <i className="bi bi-gear-fill px-2 text-primary fs-5" />
                                 <span className="fw-medium">Pengaturan</span>

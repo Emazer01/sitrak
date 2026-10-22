@@ -1,11 +1,16 @@
 import axios from "axios";
+import {
+  getDetectApiUrl as getUrlFromConfig,
+  hasGeminiApiKey,
+  getGeminiModel,
+} from "./apiConfig";
+import {
+  detectTargetViaGemini,
+  testGeminiApiKey,
+} from "./geminiDetectService";
 
-/**
- * Service untuk memanggil API Layanan Deteksi Sasaran Tembak SITRAK (sitrak-detect)
- * Berbasis FastAPI, OpenCV, dan Computer Vision.
- */
+export { detectTargetViaGemini, testGeminiApiKey };
 
-import { getDetectApiUrl as getUrlFromConfig } from "./apiConfig";
 
 /**
  * Mendapatkan Base URL sitrak-detect murni dari environment variable (.env)
@@ -274,7 +279,96 @@ export const checkDetectHealth = async (customBaseUrl = null) => {
 };
 
 /**
- * Mengunggah dan menganalisis foto sasaran tembak ke sitrak-detect
+ * Mengambil daftar detection engine yang tersedia dari layanan sitrak-detect
+ * Endpoint: GET /api/v1/detect/engines
+ */
+export const fetchAvailableEngines = async (customBaseUrl = null) => {
+  const baseUrl = customBaseUrl || getDetectApiUrl();
+  const hasKey = hasGeminiApiKey();
+  const geminiModel = getGeminiModel();
+
+  const geminiEngineObj = {
+    id: "gemini",
+    name: "Google Gemini Cloud AI",
+    type: "cloud_multimodal_ai",
+    model: geminiModel,
+    is_available: true,
+    has_api_key: hasKey,
+    description: hasKey
+      ? `Model multimodal vision Google Gemini (${geminiModel}) untuk deteksi sasaran tembak berbasis cloud (API Key terpasang).`
+      : "Model multimodal vision Google Gemini untuk deteksi sasaran tembak berbasis cloud (Tambahkan REACT_APP_GEMINI_API_KEY di .env).",
+  };
+
+  try {
+    const res = await axios.get(`${baseUrl}/api/v1/detect/engines`, {
+      timeout: 5000,
+    });
+    if (
+      res.data &&
+      res.data.status === "success" &&
+      Array.isArray(res.data.engines)
+    ) {
+      const engines = [...res.data.engines];
+      const existingGeminiIdx = engines.findIndex((e) => e.id === "gemini");
+      if (existingGeminiIdx >= 0) {
+        engines[existingGeminiIdx] = {
+          ...engines[existingGeminiIdx],
+          ...geminiEngineObj,
+        };
+      } else {
+        engines.push(geminiEngineObj);
+      }
+
+      return {
+        defaultEngine: res.data.default_engine || "model_sendiri",
+        engines,
+      };
+    }
+  } catch (err) {
+    console.warn(
+      "Gagal mengambil engine dari sitrak-detect, menggunakan fallback bawaan:",
+      err
+    );
+  }
+
+  // Fallback standar engine yang tersedia pada sitrak-detect
+  return {
+    defaultEngine: "model_sendiri",
+    engines: [
+      {
+        id: "model_sendiri",
+        name: "Model Sendiri (Local YOLO & Classical CV)",
+        type: "local_vision",
+        model: "YOLO + CV Ensemble",
+        is_available: true,
+        description:
+          "Deteksi lokal otomatis menggunakan model YOLO terlatih dan algoritma Computer Vision.",
+      },
+      {
+        id: "yolo26",
+        name: "YOLO26 (Small-Target Puncture Detector)",
+        type: "local_deep_learning",
+        model: "bullet_hole_yolo26.pt",
+        is_available: true,
+        description:
+          "Arsitektur YOLO26 dengan STAL (Small-Target-Aware Label Assignment) khusus target Krüger.",
+      },
+      {
+        id: "yolo11",
+        name: "YOLO11 (Ultralytics High-Precision Detector)",
+        type: "local_deep_learning",
+        model: "bullet_hole_yolo11.pt",
+        is_available: true,
+        description:
+          "Arsitektur Ultralytics YOLO11 terlatih untuk deteksi sasaran tembak Krüger.",
+      },
+      geminiEngineObj,
+    ],
+  };
+};
+
+/**
+ * Mengunggah dan menganalisis foto sasaran tembak ke sitrak-detect atau Google Gemini
  *
  * @param {File|Blob} imageFile - File gambar target
  * @param {Object} metadata - Metadata penembakan
@@ -286,11 +380,16 @@ export const detectTargetViaUpload = async (
   metadata = {},
   customBaseUrl = null
 ) => {
-  const baseUrl = customBaseUrl || getDetectApiUrl();
-
   if (!imageFile) {
     throw new Error("Berkas foto target tembakan wajib dipilih.");
   }
+
+  // Jika mesin yang dipilih adalah Google Gemini Cloud AI, jalankan inferensi via Gemini API
+  if (metadata.engine === "gemini") {
+    return await detectTargetViaGemini(imageFile, metadata);
+  }
+
+  const baseUrl = customBaseUrl || getDetectApiUrl();
 
   const formData = new FormData();
   formData.append("file", imageFile);
@@ -313,6 +412,10 @@ export const detectTargetViaUpload = async (
 
   if (metadata.nomorBabak) {
     formData.append("babak_number", String(metadata.nomorBabak));
+  }
+
+  if (metadata.engine) {
+    formData.append("engine", String(metadata.engine));
   }
 
   try {
@@ -446,7 +549,12 @@ export const detectTargetViaUpload = async (
       shots: normalizedShots,
       annotated_image_url: annotatedImageUrl,
       metadata: data.metadata || {},
-      model_used: "SITRAK-Detect (OpenCV Computer Vision)",
+      detection_engine_used:
+        data.detection_engine_used || metadata.engine || "model_sendiri",
+      model_used:
+        data.detection_engine_used ||
+        data.metadata?.requested_engine ||
+        "SITRAK-Detect (OpenCV Computer Vision)",
       analyzed_at: new Date().toISOString(),
     };
   } catch (error) {
@@ -459,3 +567,70 @@ export const detectTargetViaUpload = async (
     throw new Error(`Kesalahan Layanan SITRAK-Detect: ${errorMsg}`);
   }
 };
+
+/**
+ * Helper untuk mengurai dan membersihkan teks catatan analisis & rekomendasi tembakan
+ * Menghilangkan duplikasi kalimat dan memisahkan butir-butir rekomendasi secara rapi
+ *
+ * @param {string} raw - Teks mentah catatan analisis
+ * @returns {{ warning: string|null, items: string[] }}
+ */
+export const parseCatatanAnalisis = (raw) => {
+  if (!raw || typeof raw !== "string") return { warning: null, items: [] };
+
+  let text = raw.trim();
+  let warning = null;
+
+  // 1. Ekstrak teks peringatan kuota peluru jika ada
+  const warningMatch = text.match(/\[Peringatan Kuota Peluru:[^\]]+\]/i);
+  if (warningMatch) {
+    warning = warningMatch[0]
+      .replace(/^\[/, "")
+      .replace(/\]$/, "")
+      .trim();
+    text = text
+      .replace(warningMatch[0], "")
+      .replace(/^\s*[.-:]\s*/, "")
+      .trim();
+  }
+
+  // 2. Pisahkan segmentasi jika ada penggabungan ' - '
+  const primarySplits = text.split(/\s*-\s*/);
+  const rawItems = [];
+
+  primarySplits.forEach((segment) => {
+    // Pisahkan baris baru
+    const lines = segment.split(/\r?\n/);
+    lines.forEach((line) => {
+      // Pisahkan jika ada array yang tergabung koma tanpa spasi
+      const subSegments = line.split(
+        /,(?=[A-Z][a-z]+|\b(?:Koreksi|Relaksasi|Evaluasi|Pertahankan|Antisipasi|Posisi|Tekanan)\b)/
+      );
+      subSegments.forEach((sub) => {
+        const clean = sub
+          .trim()
+          .replace(/^[.,\-•*\d)]+\s*/, "")
+          .replace(/[.,]+$/, ".")
+          .trim();
+        if (clean && clean.length > 3) {
+          rawItems.push(clean);
+        }
+      });
+    });
+  });
+
+  // 3. Deduplikasi secara cerdas
+  const uniqueItems = [];
+  const seen = new Set();
+
+  rawItems.forEach((item) => {
+    const key = item.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueItems.push(item);
+    }
+  });
+
+  return { warning, items: uniqueItems };
+};
+

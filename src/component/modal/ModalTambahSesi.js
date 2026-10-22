@@ -73,9 +73,8 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                 }
             );
 
-            if (response.status === 200 || response.status == 200) {
+            if (response.status === 200) {
                 const atribut = response.data;
-                console.log("Data Atribut Modal Tambah Sesi:", atribut);
 
                 if (atribut.senjata && Array.isArray(atribut.senjata) && atribut.senjata.length > 0) {
                     setSenjataOptions(atribut.senjata);
@@ -91,7 +90,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                 }
             }
         } catch (error) {
-            console.log("Error mengambil data atribut modal:", error);
+            console.error("Error mengambil data atribut modal:", error);
         }
     };
 
@@ -109,9 +108,8 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                 },
             });
 
-            if (response.status === 200 || response.status == 200) {
+            if (response.status === 200) {
                 const resData = response.data;
-                console.log("Data Personel Modal Tambah Sesi:", resData);
 
                 let rawList = [];
                 if (Array.isArray(resData)) {
@@ -134,7 +132,7 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                 }
             }
         } catch (error) {
-            console.log("Error mengambil data personel modal:", error);
+            console.error("Error mengambil data personel modal:", error);
         }
     };
 
@@ -297,8 +295,6 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
             total_peluru_per_personel: totalPeluruPerPersonel,
         };
 
-        console.log("Mengirim payload data sesi ke /sesi:", payload);
-
         try {
             const response = await axios.post(
                 `${process.env.REACT_APP_BACKEND_URL}/sesi`,
@@ -311,7 +307,6 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                 }
             );
 
-            console.log("Respon berhasil simpan sesi:", response.data);
             alert(`Sesi Latihan "${namaSesi}" berhasil disimpan!`);
 
             if (onStartSession) {

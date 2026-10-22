@@ -5,10 +5,33 @@ import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
 import { Breadcrumb } from "../component/Breadcrumb";
 import { ModalTambahSesi } from "../component/modal/ModalTambahSesi";
+import { getBackendUrl } from "../services/apiConfig";
 
 export const Latihan = () => {
     document.title = "Latihan - SITRAK-AI";
     const navigate = useNavigate();
+
+    // State Sesi Latihan & Pagination
+    const [sesiList, setSesiList] = React.useState([]);
+    const [sesiPage, setSesiPage] = React.useState(1);
+    const [sesiLimit, setSesiLimit] = React.useState(5);
+    const [sesiTotal, setSesiTotal] = React.useState(0);
+    const [sesiTotalPages, setSesiTotalPages] = React.useState(1);
+    const [sesiLoading, setSesiLoading] = React.useState(false);
+    const [searchSesi, setSearchSesi] = React.useState("");
+    const [statusFilter, setStatusFilter] = React.useState("");
+
+    // State Metrik KPI Real-Time dari Backend
+    const [stats, setStats] = React.useState({
+        activeSesiCount: 0,
+        activeSessionName: "",
+        totalPersonel: 0,
+        activeShooterCount: 0,
+        totalHits: 0,
+        totalBulletsAllocated: 0,
+        avgScore: "0.0",
+        loading: true,
+    });
 
     // Fungsi navigasi ke detail sesi dengan menyimpan ID & index di localStorage
     const handleNavigateDetail = (item, idx) => {
@@ -22,19 +45,26 @@ export const Latihan = () => {
             if (idx !== undefined) {
                 localStorage.setItem("active_sesi_index", String(idx));
             }
+            navigate(`/detail-sesi/${targetId}`);
+        } else {
+            navigate("/detail-sesi");
         }
-        navigate("/detail-sesi");
     };
 
-    // State Sesi Latihan & Pagination
-    const [sesiList, setSesiList] = React.useState([]);
-    const [sesiPage, setSesiPage] = React.useState(1);
-    const [sesiLimit, setSesiLimit] = React.useState(5);
-    const [sesiTotal, setSesiTotal] = React.useState(0);
-    const [sesiTotalPages, setSesiTotalPages] = React.useState(1);
-    const [sesiLoading, setSesiLoading] = React.useState(false);
-    const [searchSesi, setSearchSesi] = React.useState("");
-    const [statusFilter, setStatusFilter] = React.useState("");
+    // Fungsi navigasi ke live scoring sesi
+    const handleNavigateLiveScoring = (item) => {
+        const targetId = item.id_sesi || item.id;
+        if (targetId) {
+            localStorage.setItem("active_sesi_id", String(targetId));
+            localStorage.setItem(
+                "active_sesi_kode",
+                item.kode_sesi || item.kode || `SESI-${targetId}`
+            );
+            navigate(`/live-scoring/${targetId}`);
+        } else {
+            navigate("/live-scoring");
+        }
+    };
 
     React.useEffect(() => {
         document.getElementById("btn-dashboard")?.classList.remove("sidebar-active");
@@ -46,11 +76,101 @@ export const Latihan = () => {
         document.getElementById("nav-btn-latihan")?.classList.add("sidebar-active");
     }, []);
 
+    // Fungsi mengambil seluruh metrik KPI ringkasan riil dari backend
+    const fetchKpiStats = React.useCallback(async () => {
+        try {
+            const backend = getBackendUrl();
+            const [resSesi, resPersonel] = await Promise.all([
+                axios.get(`${backend}/sesi?limit=100`),
+                axios.get(`${backend}/personel?limit=100`).catch(() => ({ data: { total: 0 } })),
+            ]);
+
+            const allSesi = Array.isArray(resSesi.data?.data)
+                ? resSesi.data.data
+                : Array.isArray(resSesi.data)
+                ? resSesi.data
+                : [];
+
+            const totalPersonel =
+                resPersonel.data?.total ||
+                (Array.isArray(resPersonel.data?.data)
+                    ? resPersonel.data.data.length
+                    : 0);
+
+            const activeSesiList = allSesi.filter(
+                (s) => (s.status || "").toLowerCase() === "berlangsung"
+            );
+            const activeSession = activeSesiList[0] || null;
+
+            // Ambil rincian setiap sesi untuk menghitung rata-rata skor riil
+            const detailPromises = allSesi.map((s) =>
+                axios
+                    .get(`${backend}/sesi/${s.id_sesi}`)
+                    .then((r) => r.data)
+                    .catch(() => null)
+            );
+            const details = await Promise.all(detailPromises);
+
+            let allScores = [];
+            let activeShooterCount = 0;
+            let totalHits = 0;
+            let totalBulletsAllocated = 0;
+
+            details.forEach((d, idx) => {
+                if (!d) return;
+                const isAct = allSesi[idx]?.id_sesi === activeSession?.id_sesi;
+                (d.gelombang || []).forEach((g) => {
+                    (g.babak || []).forEach((b) => {
+                        const bulletPerRound = parseInt(b.jumlah_peluru) || 10;
+                        const shooterCount = (b.personel || []).length;
+                        totalBulletsAllocated += bulletPerRound * shooterCount;
+
+                        (b.personel || []).forEach((p) => {
+                            const s = parseFloat(p.total_skor || 0);
+                            const h = Array.isArray(p.detail_tembakan)
+                                ? p.detail_tembakan.length
+                                : 0;
+                            totalHits += h;
+                            if (s > 0 || h > 0) allScores.push(s);
+                            if (isAct) activeShooterCount++;
+                        });
+                    });
+                });
+            });
+
+            const avgScore =
+                allScores.length > 0
+                    ? (
+                          allScores.reduce((a, b) => a + b, 0) / allScores.length
+                      ).toFixed(1)
+                    : "0.0";
+
+            setStats({
+                activeSesiCount: activeSesiList.length,
+                activeSessionName: activeSession?.nama_sesi || "",
+                totalPersonel,
+                activeShooterCount,
+                totalHits,
+                totalBulletsAllocated,
+                avgScore,
+                loading: false,
+            });
+        } catch (err) {
+            console.error("Gagal memuat KPI stats Latihan:", err);
+            setStats((prev) => ({ ...prev, loading: false }));
+        }
+    }, []);
+
+    // Effect untuk memuat KPI saat mount
+    React.useEffect(() => {
+        fetchKpiStats();
+    }, [fetchKpiStats]);
+
     // Fungsi memanggil API /sesi dengan pagination, filter status, dan pencarian
     const getSesi = async (page = 1, limit = 5, search = "", status = "") => {
         setSesiLoading(true);
         try {
-            let url = `${process.env.REACT_APP_BACKEND_URL}/sesi?page=${page}&limit=${limit}`;
+            let url = `${getBackendUrl()}/sesi?page=${page}&limit=${limit}`;
             if (search && search.trim() !== "") {
                 url += `&search=${encodeURIComponent(search.trim())}`;
             }
@@ -64,8 +184,7 @@ export const Latihan = () => {
                 },
             });
 
-            if (response.status === 200 || response.status == 200) {
-                console.log("Response GET /sesi:", response.data);
+            if (response.status === 200) {
                 const resData = response.data;
 
                 let list = [];
@@ -99,11 +218,9 @@ export const Latihan = () => {
                         1;
                 }
 
-                if (list.length > 0) {
-                    setSesiList(list);
-                    setSesiTotal(total);
-                    setSesiTotalPages(totalPages);
-                }
+                setSesiList(list);
+                setSesiTotal(total);
+                setSesiTotalPages(totalPages);
             }
         } catch (error) {
             console.error("Gagal mengambil data sesi dari API:", error);
@@ -122,10 +239,10 @@ export const Latihan = () => {
     }, [sesiPage, sesiLimit, searchSesi, statusFilter]);
 
     const handleStartSession = (sessionData) => {
-        console.log("Sesi latihan baru berhasil dibuat:", sessionData);
         // Refresh ke halaman pertama agar data sesi terbaru langsung terlihat
         setSesiPage(1);
         getSesi(1, sesiLimit, searchSesi, statusFilter);
+        fetchKpiStats();
     };
 
     const renderStatusBadge = (status) => {
@@ -192,10 +309,25 @@ export const Latihan = () => {
                             { label: "Sesi Latihan", active: true, icon: "bi bi-bullseye" },
                         ]}
                         rightContent={
-                            <span className="badge bg-body-tertiary text-secondary border px-2 py-1 d-flex align-items-center">
-                                <i className="bi bi-database me-1 text-primary"></i>
-                                {sesiTotal || sesiList.length} Sesi Terdata
-                            </span>
+                            <div className="d-flex align-items-center gap-2">
+                                <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 shadow-sm py-1 px-2"
+                                    onClick={() => {
+                                        getSesi(sesiPage, sesiLimit, searchSesi, statusFilter);
+                                        fetchKpiStats();
+                                    }}
+                                    disabled={sesiLoading || stats.loading}
+                                    title="Segarkan data sesi"
+                                >
+                                    <i className={`bi bi-arrow-clockwise ${sesiLoading ? "spin-animation" : ""}`}></i>
+                                    <span className="d-none d-sm-inline">Segarkan</span>
+                                </button>
+                                <span className="badge bg-body-tertiary text-secondary border px-2 py-1 d-flex align-items-center">
+                                    <i className="bi bi-database me-1 text-primary"></i>
+                                    {sesiTotal || sesiList.length} Sesi Terdata
+                                </span>
+                            </div>
                         }
                     />
 
@@ -222,9 +354,9 @@ export const Latihan = () => {
                             </div>
                         </div>
 
-                        {/* Metric KPI Cards Latihan */}
+                        {/* Metric KPI Cards Latihan (Data Riil Backend) */}
                         <div className="row g-3 mb-4">
-                            <div className="col-12 col-sm-6 col-xl-3">
+                            <div className="col-12 col-md-4">
                                 <div className="card border-0 shadow-sm bg-body-tertiary h-100">
                                     <div className="card-body d-flex align-items-center">
                                         <div
@@ -236,18 +368,18 @@ export const Latihan = () => {
                                         <div>
                                             <small className="text-secondary fw-semibold">Sesi Aktif</small>
                                             <h4 className="fw-bold mb-0">
-                                                {sesiList.filter((s) => (s.status || "").toLowerCase() === "berlangsung").length} Berlangsung
+                                                {stats.loading ? "..." : `${stats.activeSesiCount} Berlangsung`}
                                             </h4>
-                                            <small className="text-success">
-
-                                                <i className="bi bi-broadcast me-1"></i>Real-time Tracking
+                                            <small className={stats.activeSesiCount > 0 ? "text-success" : "text-muted"}>
+                                                <i className="bi bi-broadcast me-1"></i>
+                                                {stats.activeSessionName ? stats.activeSessionName : "Real-time Tracking"}
                                             </small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="col-12 col-sm-6 col-xl-3">
+                            <div className="col-12 col-md-4">
                                 <div className="card border-0 shadow-sm bg-body-tertiary h-100">
                                     <div className="card-body d-flex align-items-center">
                                         <div
@@ -258,34 +390,21 @@ export const Latihan = () => {
                                         </div>
                                         <div>
                                             <small className="text-secondary fw-semibold">Personel Berlatih</small>
-                                            <h4 className="fw-bold mb-0">24 Personel</h4>
+                                            <h4 className="fw-bold mb-0">
+                                                {stats.loading ? "..." : `${stats.totalPersonel} Personel`}
+                                            </h4>
                                             <small className="text-success">
-                                                <i className="bi bi-check-circle me-1"></i>Terjadwal Hari Ini
+                                                <i className="bi bi-check-circle me-1"></i>
+                                                {stats.activeShooterCount > 0
+                                                    ? `${stats.activeShooterCount} Slot Babak Aktif`
+                                                    : "Terdaftar di Sistem"}
                                             </small>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="col-12 col-sm-6 col-xl-3">
-                                <div className="card border-0 shadow-sm bg-body-tertiary h-100">
-                                    <div className="card-body d-flex align-items-center">
-                                        <div
-                                            className="bg-warning text-dark rounded-3 p-3 me-3 fs-3 d-flex align-items-center justify-content-center"
-                                            style={{ width: "55px", height: "55px" }}
-                                        >
-                                            <i className="bi bi-geo-alt-fill"></i>
-                                        </div>
-                                        <div>
-                                            <small className="text-secondary fw-semibold">Kapasitas Lane</small>
-                                            <h4 className="fw-bold mb-0">5 / 8 Lane</h4>
-                                            <small className="text-muted">3 Lane Siap Pakai</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="col-12 col-sm-6 col-xl-3">
+                            <div className="col-12 col-md-4">
                                 <div className="card border-0 shadow-sm bg-body-tertiary h-100">
                                     <div className="card-body d-flex align-items-center">
                                         <div
@@ -296,9 +415,30 @@ export const Latihan = () => {
                                         </div>
                                         <div>
                                             <small className="text-secondary fw-semibold">Rata-rata Skor Sesi</small>
-                                            <h4 className="fw-bold mb-0">89.6 / 100</h4>
-                                            <small className="text-success">
-                                                <i className="bi bi-arrow-up-short"></i>Performa Stabil
+                                            <h4 className="fw-bold mb-0">
+                                                {stats.loading ? "..." : `${stats.avgScore} / 100`}
+                                            </h4>
+                                            <small
+                                                className={
+                                                    parseFloat(stats.avgScore) >= 80
+                                                        ? "text-success fw-semibold"
+                                                        : parseFloat(stats.avgScore) >= 70
+                                                        ? "text-warning fw-semibold"
+                                                        : parseFloat(stats.avgScore) > 0
+                                                        ? "text-secondary fw-semibold"
+                                                        : "text-muted"
+                                                }
+                                            >
+                                                <i className="bi bi-bar-chart-line me-1"></i>
+                                                {parseFloat(stats.avgScore) >= 90
+                                                    ? "Kualifikasi Istimewa"
+                                                    : parseFloat(stats.avgScore) >= 80
+                                                    ? "Kualifikasi Mahir"
+                                                    : parseFloat(stats.avgScore) >= 70
+                                                    ? "Kualifikasi Cukup"
+                                                    : parseFloat(stats.avgScore) > 0
+                                                    ? "Perlu Pembinaan"
+                                                    : "Belum Ada Nilai"}
                                             </small>
                                         </div>
                                     </div>
@@ -474,17 +614,7 @@ export const Latihan = () => {
                                                                     <button
                                                                         type="button"
                                                                         className="btn btn-sm btn-outline-warning text-danger me-1"
-                                                                        onClick={() => {
-                                                                            const id = item.id_sesi || item.id;
-                                                                            if (id) {
-                                                                                localStorage.setItem("active_sesi_id", String(id));
-                                                                                localStorage.setItem(
-                                                                                    "active_sesi_kode",
-                                                                                    item.kode_sesi || item.kode || `SESI-${id}`
-                                                                                );
-                                                                            }
-                                                                            navigate("/live-scoring");
-                                                                        }}
+                                                                        onClick={() => handleNavigateLiveScoring(item)}
                                                                         title="Buka Papan Nilai Live Scoring Layar Penuh"
                                                                     >
                                                                         <i className="bi bi-display me-1 text-danger"></i> Live

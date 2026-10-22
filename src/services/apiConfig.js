@@ -87,3 +87,39 @@ export const getDetectApiUrl = () => {
 // Export konstanta langsung
 export const BACKEND_URL = getBackendUrl();
 export const DETECT_API_URL = getDetectApiUrl();
+
+/**
+ * Mendapatkan API Key Google Gemini dari Environment Variable (.env)
+ * Mendukung prefix REACT_APP_GEMINI_API_KEY, REACT_APP_GOOGLE_API_KEY, atau GEMINI_API_KEY
+ * @returns {string} API Key yang sudah dibersihkan atau string kosong jika belum diatur
+ */
+export const getGeminiApiKey = () => {
+  const key =
+    process.env.REACT_APP_GEMINI_API_KEY ||
+    process.env.REACT_APP_GOOGLE_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    "";
+  return String(key).trim().replace(/^['"]+|['"]+$/g, "");
+};
+
+/**
+ * Memeriksa apakah Gemini API Key telah dikonfigurasi di environment variable (.env)
+ * @returns {boolean}
+ */
+export const hasGeminiApiKey = () => {
+  return Boolean(getGeminiApiKey());
+};
+
+/**
+ * Mendapatkan nama model Gemini yang akan digunakan dari .env
+ * Default: gemini-2.5-flash
+ * @returns {string}
+ */
+export const getGeminiModel = () => {
+  const model =
+    process.env.REACT_APP_GEMINI_MODEL ||
+    process.env.GEMINI_MODEL ||
+    "gemini-2.5-flash";
+  return String(model).trim().replace(/^['"]+|['"]+$/g, "");
+};
+

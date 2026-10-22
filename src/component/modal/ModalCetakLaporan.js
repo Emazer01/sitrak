@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { parseCatatanAnalisis } from "../../services/sitrakDetectService";
 
 /**
  * Komponen Dokumen Laporan Resmi Latihan Menembak (SITRAK-AI)
@@ -8,6 +9,7 @@ export const DokumenLaporanSesi = ({
   sesi,
   filterGelombang = "semua",
   sertakanBalistik = true,
+  sertakanCatatanAnalisis = true,
   sertakanTandaTangan = true,
   namaPenandatangan1 = "Komandan Latihan Menembak",
   pangkatNrpPenandatangan1 = "",
@@ -108,6 +110,118 @@ export const DokumenLaporanSesi = ({
       kategoriDist,
     };
   }, [allPenembak]);
+
+  // Ekstraksi ringkasan catatan taktis penembak untuk baris tabel
+  const getShooterNotesSummary = (p) => {
+    const parts = [];
+    if (p.babak_scores && p.babak_scores.length > 0) {
+      p.babak_scores.forEach((bs) => {
+        if (
+          bs.catatan_analisis &&
+          typeof bs.catatan_analisis === "string" &&
+          bs.catatan_analisis.trim()
+        ) {
+          const parsed = parseCatatanAnalisis(bs.catatan_analisis);
+          const babakLabel =
+            bs.nama ||
+            bs.nama_babak ||
+            `Babak ${bs.nomor || bs.nomor_babak || ""}`.trim();
+          const primary =
+            parsed.items.length > 0
+              ? parsed.items.slice(0, 2).join(" • ")
+              : bs.catatan_analisis.trim();
+          parts.push(`[${babakLabel}] ${primary}`);
+        }
+      });
+    }
+    if (parts.length === 0 && (p.catatan_analisis || p.ballistics?.catatan)) {
+      const raw = p.catatan_analisis || p.ballistics?.catatan;
+      if (typeof raw === "string" && raw.trim()) {
+        const parsed = parseCatatanAnalisis(raw);
+        const primary =
+          parsed.items.length > 0
+            ? parsed.items.slice(0, 2).join(" • ")
+            : raw.trim();
+        parts.push(primary);
+      }
+    }
+    return parts.join(" | ");
+  };
+
+  // Kumpulan seluruh personel yang memiliki catatan analisis tembakan terdeteksi
+  const penembakWithCatatan = useMemo(() => {
+    const result = [];
+    displayedGelombangList.forEach((g) => {
+      (g.penembak || []).forEach((p) => {
+        const babakNotes = (p.babak_scores || [])
+          .filter(
+            (bs) =>
+              bs.catatan_analisis &&
+              typeof bs.catatan_analisis === "string" &&
+              bs.catatan_analisis.trim()
+          )
+          .map((bs) => {
+            const parsed = parseCatatanAnalisis(bs.catatan_analisis);
+            return {
+              nomorBabak: bs.nomor || bs.nomor_babak,
+              namaBabak:
+                bs.nama ||
+                bs.nama_babak ||
+                `Babak ${bs.nomor || bs.nomor_babak || ""}`.trim(),
+              rawNote: bs.catatan_analisis,
+              warning: parsed.warning,
+              items:
+                parsed.items.length > 0
+                  ? parsed.items
+                  : [bs.catatan_analisis.trim()],
+              groupingRadius:
+                bs.grouping_radius_mm !== null &&
+                bs.grouping_radius_mm !== undefined
+                  ? parseFloat(bs.grouping_radius_mm)
+                  : null,
+              offsetX:
+                bs.center_offset_x_mm !== null &&
+                bs.center_offset_x_mm !== undefined
+                  ? parseFloat(bs.center_offset_x_mm)
+                  : null,
+              offsetY:
+                bs.center_offset_y_mm !== null &&
+                bs.center_offset_y_mm !== undefined
+                  ? parseFloat(bs.center_offset_y_mm)
+                  : null,
+              skor: bs.skor,
+            };
+          });
+
+        let generalNote = null;
+        const rawDirect = p.catatan_analisis || p.ballistics?.catatan;
+        if (rawDirect && typeof rawDirect === "string" && rawDirect.trim()) {
+          const parsed = parseCatatanAnalisis(rawDirect);
+          generalNote = {
+            rawNote: rawDirect,
+            warning: parsed.warning,
+            items:
+              parsed.items.length > 0 ? parsed.items : [rawDirect.trim()],
+          };
+        }
+
+        if (babakNotes.length > 0 || generalNote) {
+          result.push({
+            id: p.id_personel_penembak || `${g.nomor_gelombang}-${p.lane}`,
+            lane: p.lane,
+            nama: p.nama,
+            nrp: p.nrp,
+            satuan: p.satuan,
+            kategori: p.kategori,
+            nomorGelombang: g.nomor_gelombang,
+            babakNotes,
+            generalNote,
+          });
+        }
+      });
+    });
+    return result;
+  }, [displayedGelombangList]);
 
   if (!sesi) return null;
 
@@ -216,15 +330,15 @@ export const DokumenLaporanSesi = ({
                 Model Senjata
               </th>
               <td style={{ width: "30%" }}>
-                {sesi.model_senjata || sesi.jenis_senjata || "-"}
+                {sesi.model_senjata || sesi.jenis_senjata || "-"} ({sesi.pabrikan || "-"})
               </td>
             </tr>
             <tr>
               <th className="bg-light">Waktu / Tanggal</th>
               <td>{formatTanggalLengkap(sesi.tanggal)}</td>
-              <th className="bg-light">Kaliber & Pabrikan</th>
+              <th className="bg-light">Kaliber</th>
               <td>
-                {sesi.kaliber || "-"} • {sesi.pabrikan || "-"}
+                {sesi.kaliber || "-"}
               </td>
             </tr>
             <tr>
@@ -471,68 +585,72 @@ export const DokumenLaporanSesi = ({
                           badgeClass = "badge bg-danger-subtle text-danger border border-danger";
                         }
 
+                        const shooterNoteSummary = sertakanCatatanAnalisis ? getShooterNotesSummary(p) : null;
+
                         return (
-                          <tr key={p.id_personel_penembak || idx}>
-                            <td className="text-center fw-bold">
-                              {p.lane || idx + 1}
-                            </td>
-                            <td className="text-start">
-                              <div className="fw-bold text-dark">
-                                {p.nama}
-                              </div>
-                            </td>
-                            <td className="text-center font-monospace">
-                              {p.nrp || "-"}<br/>
-                              {p.satuan || "-"}
-                            </td>
-                            {(sesi.babak || []).map((b) => {
-                              const bScore = (p.babak_scores || []).find(
-                                (bs) =>
-                                  String(bs.nomor) ===
-                                    String(b.nomor_babak) ||
-                                  String(bs.id_babak) ===
-                                    String(b.id_babak)
-                              );
-                              return (
-                                <td
-                                  key={b.nomor_babak}
-                                  className="text-center font-monospace"
-                                >
-                                  {bScore ? bScore.skor : 0}
-                                </td>
-                              );
-                            })}
-                            <td className="text-center fw-bold text-dark font-monospace">
-                              {p.total_skor}
-                              <span className="text-muted fw-normal" style={{ fontSize: "9px" }}>
-                                /{p.total_max}
-                              </span>
-                            </td>
-                            <td className="text-center fw-bold font-monospace">
-                              {p.akurasi_akhir}%
-                            </td>
-                            <td className="text-center">
-                              <span className={badgeClass} style={{ fontSize: "9.5px" }}>
-                                {p.kategori}
-                              </span>
-                            </td>
-                            {sertakanBalistik && (
-                              <td className="text-start" style={{ fontSize: "9.5px" }}>
-                                {p.ballistics?.groupingRadius ? (
-                                  <div>
-                                    <div>Grp: {p.ballistics.groupingRadius.toFixed(1)} mm</div>
-                                    {p.ballistics.offsetX !== null && (
-                                      <div className="text-muted">
-                                        MPI: X:{p.ballistics.offsetX.toFixed(0)}, Y:{p.ballistics.offsetY?.toFixed(0)}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="text-muted">-</span>
-                                )}
+                          <React.Fragment key={p.id_personel_penembak || idx}>
+                            <tr style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
+                              <td className="text-center fw-bold">
+                                {p.lane || idx + 1}
                               </td>
-                            )}
-                          </tr>
+                              <td className="text-start">
+                                <div className="fw-bold text-dark">
+                                  {p.nama}
+                                </div>
+                              </td>
+                              <td className="text-center font-monospace">
+                                {p.nrp || "-"}<br/>
+                                {p.satuan || "-"}
+                              </td>
+                              {(sesi.babak || []).map((b) => {
+                                const bScore = (p.babak_scores || []).find(
+                                  (bs) =>
+                                    String(bs.nomor) ===
+                                      String(b.nomor_babak) ||
+                                    String(bs.id_babak) ===
+                                      String(b.id_babak)
+                                );
+                                return (
+                                  <td
+                                    key={b.nomor_babak}
+                                    className="text-center font-monospace"
+                                  >
+                                    {bScore ? bScore.skor : 0}
+                                  </td>
+                                );
+                              })}
+                              <td className="text-center fw-bold text-dark font-monospace">
+                                {p.total_skor}
+                                <span className="text-muted fw-normal" style={{ fontSize: "9px" }}>
+                                  /{p.total_max}
+                                </span>
+                              </td>
+                              <td className="text-center fw-bold font-monospace">
+                                {p.akurasi_akhir}%
+                              </td>
+                              <td className="text-center">
+                                <span className={badgeClass} style={{ fontSize: "9.5px" }}>
+                                  {p.kategori}
+                                </span>
+                              </td>
+                              {sertakanBalistik && (
+                                <td className="text-start" style={{ fontSize: "9.5px" }}>
+                                  {p.ballistics?.groupingRadius ? (
+                                    <div>
+                                      <div>Grp: {p.ballistics.groupingRadius.toFixed(1)} mm</div>
+                                      {p.ballistics.offsetX !== null && (
+                                        <div className="text-muted">
+                                          MPI: X:{p.ballistics.offsetX.toFixed(0)}, Y:{p.ballistics.offsetY?.toFixed(0)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted">-</span>
+                                  )}
+                                </td>
+                              )}
+                            </tr>
+                          </React.Fragment>
                         );
                       })
                     )}
@@ -583,20 +701,153 @@ export const DokumenLaporanSesi = ({
           pageBreakInside: "avoid",
         }}
       >
-        <div className="fw-bold mb-1 text-dark">
-          <i className="bi bi-pencil-square me-1 text-primary"></i> IV. Catatan & Rekomendasi Instruktur Menembak:
+        <div className="fw-bold mb-2 text-dark fs-6 border-bottom pb-1">
+          <i className="bi bi-pencil-square me-1 text-primary"></i> IV. Catatan & Rekomendasi Evaluasi Menembak
         </div>
-        <ul className="mb-0 ps-3 text-secondary">
-          <li>
-            Seluruh tembakan telah direkam dan diverifikasi menggunakan sistem computer vision presisi SITRAK-AI.
-          </li>
-          <li>
-            Personel dengan kualifikasi <strong>Istimewa</strong> dan <strong>Mahir</strong> dinyatakan telah memenuhi standar kemahiran menembak perorangan pada jarak dan sikap yang ditentukan.
-          </li>
-          <li>
-            Personel dengan kualifikasi <strong>Perlu Pembinaan</strong> direkomendasikan untuk mengikuti evaluasi koreksi sikap bidik (sight alignment), remasan picu (trigger control), dan latihan bayangan (dry fire).
-          </li>
-        </ul>
+
+        {/* IV.A Evaluasi Standar Sesi Latihan */}
+        <div className="mb-3">
+          <div className="fw-semibold text-dark small mb-1">
+            A. Evaluasi Standar Sesi Latihan:
+          </div>
+          <ul className="mb-0 ps-3 text-secondary">
+            <li>
+              Seluruh tembakan telah direkam dan diverifikasi menggunakan sistem computer vision presisi SITRAK-AI.
+            </li>
+            <li>
+              Personel dengan kualifikasi <strong>Istimewa</strong> dan <strong>Mahir</strong> dinyatakan telah memenuhi standar kemahiran menembak perorangan pada jarak dan sikap yang ditentukan.
+            </li>
+            <li>
+              Personel dengan kualifikasi <strong>Perlu Pembinaan</strong> direkomendasikan untuk mengikuti evaluasi koreksi sikap bidik (sight alignment), remasan picu (trigger control), dan latihan bayangan (dry fire).
+            </li>
+          </ul>
+        </div>
+
+        {/* IV.B Catatan & Rekomendasi Taktis Perorangan */}
+        {sertakanCatatanAnalisis && (
+          <div className="pt-2 border-top">
+            <div className="fw-semibold text-dark small mb-2 d-flex align-items-center justify-content-between">
+              <span>
+                <i className="bi bi-cpu text-primary me-1"></i> B. Catatan Analisis Taktis & Koreksi Perorangan (SITRAK-Detect AI):
+              </span>
+              <span className="badge bg-secondary-subtle text-secondary font-monospace" style={{ fontSize: "9.5px" }}>
+                {penembakWithCatatan.length} Personel Dianalisis
+              </span>
+            </div>
+
+            {penembakWithCatatan.length === 0 ? (
+              <div className="text-muted fst-italic px-2 py-1" style={{ fontSize: "11px" }}>
+                Belum ada data catatan analisis taktis yang tersimpan untuk sesi/gelombang yang dipilih. Catatan akan terisi secara otomatis setelah target tembakan diproses oleh sistem deteksi.
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-2 mt-2">
+                {penembakWithCatatan.map((p, pIdx) => {
+                  let badgeClass = "badge bg-secondary-subtle text-secondary border";
+                  if (p.kategori === "Istimewa") {
+                    badgeClass = "badge bg-success-subtle text-success border border-success";
+                  } else if (p.kategori === "Mahir") {
+                    badgeClass = "badge bg-primary-subtle text-primary border border-primary";
+                  } else if (p.kategori === "Cukup") {
+                    badgeClass = "badge bg-warning-subtle text-warning-emphasis border border-warning";
+                  } else if (p.kategori === "Perlu Pembinaan") {
+                    badgeClass = "badge bg-danger-subtle text-danger border border-danger";
+                  }
+
+                  return (
+                    <div
+                      key={p.id || pIdx}
+                      className="p-2 border rounded bg-white shadow-none"
+                      style={{
+                        breakInside: "avoid",
+                        pageBreakInside: "avoid",
+                        fontSize: "11px",
+                      }}
+                    >
+                      <div className="d-flex align-items-center justify-content-between border-bottom pb-1 mb-1">
+                        <div className="fw-bold text-dark">
+                          <span className="badge bg-dark me-1" style={{ fontSize: "9px" }}>
+                            Gel {p.nomorGelombang} • Lane {p.lane}
+                          </span>
+                          {p.nama}
+                          <span className="text-muted fw-normal ms-1 font-monospace" style={{ fontSize: "10px" }}>
+                            ({p.nrp ? `NRP: ${p.nrp}` : "-"} • {p.satuan || "-"})
+                          </span>
+                        </div>
+                        <span className={badgeClass} style={{ fontSize: "9px" }}>
+                          {p.kategori}
+                        </span>
+                      </div>
+
+                      {/* Rincian per Babak */}
+                      {p.babakNotes && p.babakNotes.length > 0 ? (
+                        p.babakNotes.map((bn, bIdx) => (
+                          <div
+                            key={bIdx}
+                            className={bIdx > 0 ? "pt-2 mt-2 border-top border-light-subtle" : "mt-1"}
+                          >
+                            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                              <span className="fw-semibold text-primary" style={{ fontSize: "10.5px" }}>
+                                <i className="bi bi-bullseye me-1"></i>
+                                {bn.namaBabak} {bn.skor !== undefined && bn.skor !== null ? `(Skor: ${bn.skor})` : ""}
+                              </span>
+                              {bn.groupingRadius !== null && (
+                                <span className="badge bg-light text-dark border font-monospace" style={{ fontSize: "9px" }}>
+                                  Grouping: {(bn.groupingRadius * 2).toFixed(1)} mm
+                                </span>
+                              )}
+                              {bn.offsetX !== null && bn.offsetY !== null && (
+                                <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: "9px" }}>
+                                  MPI: X:{bn.offsetX.toFixed(0)}, Y:{bn.offsetY.toFixed(0)}
+                                </span>
+                              )}
+                            </div>
+
+                            {bn.warning && (
+                              <div
+                                className="alert alert-warning py-1 px-2 mb-1 d-flex align-items-center gap-1 border border-warning"
+                                style={{ fontSize: "10px" }}
+                              >
+                                <i className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"></i>
+                                <span>{bn.warning}</span>
+                              </div>
+                            )}
+
+                            <ul className="mb-0 ps-3 text-secondary" style={{ lineHeight: "1.4" }}>
+                              {bn.items.map((item, itemIdx) => (
+                                <li key={itemIdx}>
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))
+                      ) : p.generalNote ? (
+                        <div className="mt-1">
+                          {p.generalNote.warning && (
+                            <div
+                              className="alert alert-warning py-1 px-2 mb-1 d-flex align-items-center gap-1 border border-warning"
+                              style={{ fontSize: "10px" }}
+                            >
+                              <i className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"></i>
+                              <span>{p.generalNote.warning}</span>
+                            </div>
+                          )}
+                          <ul className="mb-0 ps-3 text-secondary" style={{ lineHeight: "1.4" }}>
+                            {p.generalNote.items.map((item, itemIdx) => (
+                              <li key={itemIdx}>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 7. LEMBAR PENGESAHAN / TANDA TANGAN RESMI */}
@@ -667,6 +918,7 @@ export const ModalCetakLaporan = ({
   // Opsi cetak
   const [filterGelombang, setFilterGelombang] = useState("semua"); // "semua" | string nomor gelombang
   const [sertakanBalistik, setSertakanBalistik] = useState(true);
+  const [sertakanCatatanAnalisis, setSertakanCatatanAnalisis] = useState(true);
   const [sertakanTandaTangan, setSertakanTandaTangan] = useState(true);
   const [namaPenandatangan1, setNamaPenandatangan1] = useState(
     sesi?.pelatih || "Tommy Firmansyah, S.Hub.Int."
@@ -780,6 +1032,21 @@ export const ModalCetakLaporan = ({
                   <input
                     className="form-check-input"
                     type="checkbox"
+                    id="checkCatatanAnalisis"
+                    checked={sertakanCatatanAnalisis}
+                    onChange={(e) => setSertakanCatatanAnalisis(e.target.checked)}
+                  />
+                  <label
+                    className="form-check-label small fw-semibold text-light"
+                    htmlFor="checkCatatanAnalisis"
+                  >
+                    Sertakan Catatan Analisis Taktis
+                  </label>
+                </div>
+                <div className="form-check form-switch mb-0">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
                     id="checkTTD"
                     checked={sertakanTandaTangan}
                     onChange={(e) => setSertakanTandaTangan(e.target.checked)}
@@ -863,6 +1130,7 @@ export const ModalCetakLaporan = ({
               sesi={sesi}
               filterGelombang={filterGelombang}
               sertakanBalistik={sertakanBalistik}
+              sertakanCatatanAnalisis={sertakanCatatanAnalisis}
               sertakanTandaTangan={sertakanTandaTangan}
               namaPenandatangan1={namaPenandatangan1}
               pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
@@ -908,6 +1176,7 @@ export const ModalCetakLaporan = ({
           sesi={sesi}
           filterGelombang={filterGelombang}
           sertakanBalistik={sertakanBalistik}
+          sertakanCatatanAnalisis={sertakanCatatanAnalisis}
           sertakanTandaTangan={sertakanTandaTangan}
           namaPenandatangan1={namaPenandatangan1}
           pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}

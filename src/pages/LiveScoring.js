@@ -1,6 +1,8 @@
 import * as React from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
+import { parseCatatanAnalisis } from "../services/sitrakDetectService";
+import { getBackendUrl } from "../services/apiConfig";
 
 /**
  * Halaman Live Scoring Latihan Menembak (SITRAK-AI)
@@ -9,6 +11,7 @@ import { useParams, useNavigate } from "react-router-dom";
  * - Mode Layar Penuh (Fullscreen) untuk proyektor/layar monitor lapangan tembak
  * - Auto-refresh real-time dengan countdown dan indikator LIVE berkedip
  * - Pilihan mode tampilan (Lesan Vektor SVG, Foto Deteksi Kamera, atau Split)
+ * - Mode Fokus Perorangan (Livescore Per Orang) dengan pembesaran target, tabel butir peluru, dan catatan taktis
  * - Pemeringkatan skor langsung (Leaderboard) dan statistik gelombang
  */
 export const LiveScoring = () => {
@@ -26,9 +29,21 @@ export const LiveScoring = () => {
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [viewMode, setViewMode] = React.useState("svg"); // 'svg' | 'foto' | 'split'
   const [sortBy, setSortBy] = React.useState("lane"); // 'lane' | 'score'
+  const [scoringViewMode, setScoringViewMode] = React.useState("grid"); // 'grid' | 'individual'
+  const [selectedShooterId, setSelectedShooterId] = React.useState(null);
+  const [highlightedHitNomor, setHighlightedHitNomor] = React.useState(null);
+  const [showToolbar, setShowToolbar] = React.useState(() => {
+    const saved = localStorage.getItem("sitrak_livescore_show_toolbar");
+    return saved !== null ? saved === "true" : true;
+  });
   const [autoRefresh, setAutoRefresh] = React.useState(true);
   const [refreshCountdown, setRefreshCountdown] = React.useState(5);
   const [lastRefreshedAt, setLastRefreshedAt] = React.useState(new Date());
+
+  // Simpan preferensi showToolbar ke localStorage
+  React.useEffect(() => {
+    localStorage.setItem("sitrak_livescore_show_toolbar", String(showToolbar));
+  }, [showToolbar]);
 
   const containerRef = React.useRef(null);
 
@@ -67,8 +82,7 @@ export const LiveScoring = () => {
     ) {
       return url;
     }
-    const backendBase =
-      process.env.REACT_APP_BACKEND_URL || "http://172.16.8.240:1200";
+    const backendBase = getBackendUrl();
     return `${backendBase}${url.startsWith("/") ? "" : "/"}${url}`;
   };
 
@@ -82,7 +96,7 @@ export const LiveScoring = () => {
     if (showSpinner) setLoading(true);
 
     try {
-      const url = `${process.env.REACT_APP_BACKEND_URL}/sesi/${currentId}`;
+      const url = `${getBackendUrl()}/sesi/${currentId}`;
       const response = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -362,7 +376,7 @@ export const LiveScoring = () => {
   // Muat daftar sesi berstatus 'Berlangsung' untuk quick-switch
   const fetchAllSesi = async () => {
     try {
-      const url = `${process.env.REACT_APP_BACKEND_URL}/sesi?limit=50`;
+      const url = `${getBackendUrl()}/sesi?limit=50`;
       const res = await axios.get(url, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
@@ -489,12 +503,14 @@ export const LiveScoring = () => {
       currentBabakHits: hits,
       currentBabakBullseye: bullseyeCount,
       currentBabakFoto: foto,
+      currentBabakCatatan:
+        bScore?.catatan_analisis || p.catatan_analisis || null,
       currentBabakBallistics: {
         grouping: bScore?.grouping_radius_mm,
         offsetX: bScore?.center_offset_x_mm,
         offsetY: bScore?.center_offset_y_mm,
         status: bScore?.status_analisis,
-        catatan: bScore?.catatan_analisis,
+        catatan: bScore?.catatan_analisis || p.catatan_analisis || null,
       },
       currentKategori: kategori,
     };
@@ -539,6 +555,69 @@ export const LiveScoring = () => {
     return b.currentBabakBullseye - a.currentBabakBullseye;
   });
 
+  // Penembak aktif untuk Mode Fokus Perorangan (Individual)
+  const activeShooter =
+    displayedShooters.find(
+      (s) => String(s.id_personel_penembak) === String(selectedShooterId)
+    ) ||
+    displayedShooters[0] ||
+    null;
+
+  const activeShooterIndex = displayedShooters.findIndex(
+    (s) =>
+      String(s.id_personel_penembak) ===
+      String(activeShooter?.id_personel_penembak)
+  );
+
+  const handlePrevShooter = React.useCallback(() => {
+    if (displayedShooters.length === 0) return;
+    const prevIdx =
+      (activeShooterIndex - 1 + displayedShooters.length) %
+      displayedShooters.length;
+    setSelectedShooterId(displayedShooters[prevIdx].id_personel_penembak);
+    setHighlightedHitNomor(null);
+  }, [activeShooterIndex, displayedShooters]);
+
+  const handleNextShooter = React.useCallback(() => {
+    if (displayedShooters.length === 0) return;
+    const nextIdx = (activeShooterIndex + 1) % displayedShooters.length;
+    setSelectedShooterId(displayedShooters[nextIdx].id_personel_penembak);
+    setHighlightedHitNomor(null);
+  }, [activeShooterIndex, displayedShooters]);
+
+  // Listener keyboard:
+  // - 'H' / 'T': Sembunyikan atau tampilkan toolbar kontrol
+  // - Panah kiri / kanan: Navigasi cepat penembak (pada Mode Per Orang)
+  // - 'Escape': Kembali ke Mode Grid Semua Lane
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      const tag = (e.target?.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
+      // Pintasan tombol H / T untuk toggle toolbar
+      if (e.key === "h" || e.key === "H" || e.key === "t" || e.key === "T") {
+        e.preventDefault();
+        setShowToolbar((prev) => !prev);
+        return;
+      }
+
+      if (scoringViewMode === "individual") {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          handlePrevShooter();
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          handleNextShooter();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          setScoringViewMode("grid");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [scoringViewMode, handlePrevShooter, handleNextShooter]);
+
   const renderBadgeKategori = (kategori) => {
     switch (kategori) {
       case "Istimewa":
@@ -556,6 +635,546 @@ export const LiveScoring = () => {
           <span className="badge bg-secondary text-white">Belum Menembak</span>
         );
     }
+  };
+
+  // Helper render target SVG berukuran besar untuk Mode Individual
+  const renderLargeSvgTarget = (shooter) => {
+    if (!shooter) return null;
+    const hits = shooter.currentBabakHits || [];
+    const ballistics = shooter.currentBabakBallistics || {};
+
+    return (
+      <svg
+        viewBox="0 0 100 100"
+        className="w-100 h-auto"
+        style={{ maxHeight: "380px" }}
+      >
+        <defs>
+          <filter id="shotGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="1.2"
+              floodColor="#00f2fe"
+              floodOpacity="0.8"
+            />
+          </filter>
+          <filter id="bullGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation="1.2"
+              floodColor="#ff3838"
+              floodOpacity="0.85"
+            />
+          </filter>
+        </defs>
+
+        {/* Lingkaran konsentris target ring 1 sampai 10 */}
+        <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="0.8" />
+        <circle cx="50" cy="50" r="43.2" fill="#f1f3f5" stroke="#212529" strokeWidth="0.5" />
+        <circle cx="50" cy="50" r="38.4" fill="#e9ecef" stroke="#212529" strokeWidth="0.5" />
+        <circle cx="50" cy="50" r="33.6" fill="#dee2e6" stroke="#212529" strokeWidth="0.5" />
+        <circle cx="50" cy="50" r="28.8" fill="#ced4da" stroke="#212529" strokeWidth="0.5" />
+        <circle cx="50" cy="50" r="24" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
+        <circle cx="50" cy="50" r="19.2" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
+        <circle cx="50" cy="50" r="14.4" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
+        <circle cx="50" cy="50" r="9.6" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
+        <circle cx="50" cy="50" r="4.8" fill="#dc3545" stroke="#ffffff" strokeWidth="0.6" />
+        <circle cx="50" cy="50" r="2" fill="#dc3545" stroke="#ffffff" strokeWidth="0.4" />
+
+        {/* Garis Crosshair / Reticle */}
+        <line
+          x1="50"
+          y1="2"
+          x2="50"
+          y2="98"
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth="0.4"
+          strokeDasharray="1,1"
+        />
+        <line
+          x1="2"
+          y1="50"
+          x2="98"
+          y2="50"
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth="0.4"
+          strokeDasharray="1,1"
+        />
+
+        {/* Angka Ring Lesan */}
+        <text x="50" y="4.5" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">1</text>
+        <text x="50" y="9.2" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">2</text>
+        <text x="50" y="14" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">3</text>
+        <text x="50" y="18.8" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">4</text>
+        <text x="50" y="23.6" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">5</text>
+        <text x="50" y="28.4" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">6</text>
+        <text x="50" y="33.2" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">7</text>
+        <text x="50" y="38" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">8</text>
+        <text x="50" y="42.8" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">9</text>
+        <text x="50" y="50.8" fill="#ffffff" fontSize="1.8" fontWeight="bold" textAnchor="middle">X</text>
+
+        {/* Lingkaran Grouping Balistik (bila ada) */}
+        {ballistics.grouping && (
+          <circle
+            cx={50 + ((ballistics.offsetX || 0) / 400) * 50}
+            cy={50 + ((ballistics.offsetY || 0) / 400) * 50}
+            r={Math.min(
+              45,
+              Math.max(5, ((ballistics.grouping || 20) / 400) * 50)
+            )}
+            fill="rgba(6, 182, 212, 0.08)"
+            stroke="#06b6d4"
+            strokeWidth="0.6"
+            strokeDasharray="2,1.5"
+          />
+        )}
+
+        {/* Titik Perolehan Tembakan (Hits) */}
+        {hits.length === 0 ? (
+          <text
+            x="50"
+            y="51.5"
+            fill="#ffffff"
+            fontSize="3.2"
+            fontWeight="600"
+            textAnchor="middle"
+            opacity="0.85"
+          >
+            Menunggu Tembakan
+          </text>
+        ) : (
+          hits.map((h, i) => {
+            const isBull =
+              h.poin === 10 ||
+              h.ring === "10" ||
+              String(h.ring).toLowerCase().includes("bull");
+            const isHighlighted = highlightedHitNomor === (h.nomor || i + 1);
+            const hitRadius = isHighlighted ? 3.8 : 2.7;
+
+            let hitColor = "#ffc107";
+            if (isBull) hitColor = "#ff3838";
+            else if (h.poin >= 9) hitColor = "#10b981";
+            else if (h.poin >= 8) hitColor = "#06b6d4";
+
+            return (
+              <g
+                key={i}
+                style={{ cursor: "pointer" }}
+                onClick={() =>
+                  setHighlightedHitNomor(
+                    highlightedHitNomor === (h.nomor || i + 1)
+                      ? null
+                      : h.nomor || i + 1
+                  )
+                }
+                onMouseEnter={() => setHighlightedHitNomor(h.nomor || i + 1)}
+                onMouseLeave={() => setHighlightedHitNomor(null)}
+              >
+                <title>{`Peluru #${h.nomor || i + 1}: Skor ${h.poin} (Ring ${h.ring}) | Jarak: ${h.jarak_pusat_mm !== null && h.jarak_pusat_mm !== undefined ? `${h.jarak_pusat_mm} mm` : "-"} | Koordinat: (${h.rawX?.toFixed(1) || h.x.toFixed(1)}, ${h.rawY?.toFixed(1) || h.y.toFixed(1)})`}</title>
+
+                {isHighlighted && (
+                  <circle
+                    cx={h.x}
+                    cy={h.y}
+                    r={hitRadius + 2.5}
+                    fill="rgba(0, 242, 254, 0.25)"
+                    stroke="#00f2fe"
+                    strokeWidth="0.8"
+                    filter="url(#shotGlow)"
+                  />
+                )}
+
+                <circle
+                  cx={h.x}
+                  cy={h.y}
+                  r={hitRadius}
+                  fill={hitColor}
+                  stroke={isHighlighted ? "#ffffff" : "#000000"}
+                  strokeWidth={isHighlighted ? 0.9 : 0.6}
+                  filter={isBull ? "url(#bullGlow)" : undefined}
+                />
+
+                <circle
+                  cx={h.x}
+                  cy={h.y}
+                  r={0.8}
+                  fill={isBull ? "#ffffff" : "#dc3545"}
+                />
+
+                <text
+                  x={h.x}
+                  y={h.y + 0.9}
+                  fill={isBull ? "#ffffff" : "#000000"}
+                  fontSize={isHighlighted ? "2.6" : "2.2"}
+                  fontWeight="bold"
+                  textAnchor="middle"
+                  pointerEvents="none"
+                >
+                  {h.nomor || i + 1}
+                </text>
+              </g>
+            );
+          })
+        )}
+      </svg>
+    );
+  };
+
+  // Helper render foto anotasi kamera untuk Mode Individual
+  const renderPhotoTarget = (shooter) => {
+    if (!shooter) return null;
+    const fotoUrl = shooter.currentBabakFoto
+      ? getFotoUrl(shooter.currentBabakFoto)
+      : null;
+
+    if (!fotoUrl) {
+      return (
+        <div className="text-center py-5 text-secondary">
+          <i className="bi bi-camera-video-off fs-1 d-block mb-2 text-secondary opacity-50"></i>
+          <p className="small mb-1 text-light">Belum ada foto deteksi kamera</p>
+          <span className="small text-secondary" style={{ fontSize: "0.72rem" }}>
+            Foto anotasi AI akan muncul saat sasaran diproses
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="position-relative w-100 text-center">
+        <img
+          src={fotoUrl}
+          alt={`Foto Kamera Lane ${shooter.lane}`}
+          className="img-fluid rounded-3 shadow w-100 h-auto"
+          style={{ maxHeight: "380px", objectFit: "contain" }}
+        />
+        <a
+          href={fotoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-sm btn-dark position-absolute bottom-0 end-0 m-2 py-1 px-2 border border-secondary shadow opacity-90"
+          style={{ fontSize: "0.72rem" }}
+          title="Buka foto resolusi penuh di tab baru"
+        >
+          <i className="bi bi-arrows-angle-expand me-1 text-info"></i> Perbesar
+        </a>
+      </div>
+    );
+  };
+
+  // Helper render catatan analisis taktis untuk Mode Individual
+  const renderIndividualAnalysis = (shooter) => {
+    const rawCatatan =
+      shooter?.currentBabakCatatan || shooter?.currentBabakBallistics?.catatan;
+    const parsed = parseCatatanAnalisis(rawCatatan);
+    const hasCatatan = Boolean(
+      rawCatatan && (parsed.items.length > 0 || parsed.warning)
+    );
+
+    return (
+      <div
+        className="card border-0 shadow-lg rounded-4 overflow-hidden"
+        style={{
+          backgroundColor: "rgba(15, 23, 42, 0.9)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+        }}
+      >
+        <div
+          className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+          style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+        >
+          <span
+            className="fw-semibold text-info d-flex align-items-center gap-1.5"
+            style={{ fontSize: "0.82rem" }}
+          >
+            <i className="bi bi-chat-left-text-fill text-info"></i>
+            Catatan Analisis & Rekomendasi Taktis Pelatih:
+          </span>
+          {shooter?.currentBabakBallistics?.status && (
+            <span
+              className="badge bg-primary text-white"
+              style={{ fontSize: "0.68rem" }}
+            >
+              {shooter.currentBabakBallistics.status}
+            </span>
+          )}
+        </div>
+        <div className="card-body p-3">
+          {hasCatatan ? (
+            <div>
+              {parsed.warning && (
+                <div
+                  className="alert alert-warning py-2 px-3 mb-2.5 border border-warning border-opacity-50 text-warning-emphasis d-flex align-items-start gap-2 rounded-3"
+                  style={{
+                    fontSize: "0.78rem",
+                    backgroundColor: "rgba(234, 179, 8, 0.12)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <i
+                    className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
+                    style={{ fontSize: "0.9rem", marginTop: "2px" }}
+                  ></i>
+                  <div>
+                    <strong className="text-warning">Koreksi Kuota:</strong>{" "}
+                    {parsed.warning.replace(
+                      /^Peringatan Kuota Peluru:\s*/i,
+                      ""
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {parsed.items.length > 1 ? (
+                <ul
+                  className="mb-0 ps-3 text-white-50"
+                  style={{ fontSize: "0.8rem", lineHeight: 1.55 }}
+                >
+                  {parsed.items.map((item, idx) => (
+                    <li key={idx} className="mb-1.5 text-light">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p
+                  className="mb-0 text-light"
+                  style={{ fontSize: "0.8rem", lineHeight: 1.55 }}
+                >
+                  {parsed.items[0] || rawCatatan}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div
+              className="text-secondary small fst-italic py-2 text-center"
+              style={{ fontSize: "0.78rem" }}
+            >
+              <i className="bi bi-info-circle me-1"></i> Belum ada catatan analisis tembakan untuk babak ini. Catatan akan otomatis diperbarui saat sistem SITRAK-Detect menganalisis sasaran.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Helper render tabel rincian shot-by-shot untuk Mode Individual
+  const renderShotByShotTable = (shooter) => {
+    const hits = shooter?.currentBabakHits || [];
+
+    if (hits.length === 0) {
+      return (
+        <div className="text-center py-4 text-secondary small fst-italic">
+          Belum ada data butir tembakan pada babak ini
+        </div>
+      );
+    }
+
+    return (
+      <div className="table-responsive" style={{ maxHeight: "250px" }}>
+        <table
+          className="table table-dark table-hover table-sm mb-0 align-middle"
+          style={{ fontSize: "0.78rem" }}
+        >
+          <thead
+            className="table-secondary text-dark sticky-top"
+            style={{ fontSize: "0.72rem" }}
+          >
+            <tr>
+              <th className="text-center" style={{ width: "45px" }}>
+                #
+              </th>
+              <th className="text-center" style={{ width: "65px" }}>
+                Skor
+              </th>
+              <th className="text-center">Zona Ring</th>
+              <th className="text-center">Jarak Pusat</th>
+              <th className="text-center">Koordinat</th>
+              <th className="text-center" style={{ width: "65px" }}>
+                Sorot
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {hits.map((h, hIdx) => {
+              const isBull =
+                h.poin === 10 ||
+                h.ring === "10" ||
+                String(h.ring).toLowerCase().includes("bull");
+              const isSelected = highlightedHitNomor === (h.nomor || hIdx + 1);
+
+              return (
+                <tr
+                  key={hIdx}
+                  style={{
+                    cursor: "pointer",
+                    backgroundColor: isSelected
+                      ? "rgba(6, 182, 212, 0.22)"
+                      : undefined,
+                  }}
+                  onMouseEnter={() =>
+                    setHighlightedHitNomor(h.nomor || hIdx + 1)
+                  }
+                  onMouseLeave={() => setHighlightedHitNomor(null)}
+                  onClick={() =>
+                    setHighlightedHitNomor(
+                      isSelected ? null : h.nomor || hIdx + 1
+                    )
+                  }
+                >
+                  <td className="text-center font-monospace fw-bold">
+                    #{h.nomor || hIdx + 1}
+                  </td>
+                  <td className="text-center">
+                    <span
+                      className={`badge font-monospace ${
+                        isBull
+                          ? "bg-danger text-white border border-danger"
+                          : h.poin >= 9
+                          ? "bg-success text-white"
+                          : h.poin >= 8
+                          ? "bg-info text-dark fw-bold"
+                          : "bg-warning text-dark fw-bold"
+                      }`}
+                    >
+                      {h.poin}
+                    </span>
+                  </td>
+                  <td className="text-center">
+                    <span className="badge bg-dark border border-secondary text-light">
+                      {h.ring || "-"}
+                    </span>
+                  </td>
+                  <td className="text-center font-monospace">
+                    {h.jarak_pusat_mm !== null &&
+                    h.jarak_pusat_mm !== undefined
+                      ? `${h.jarak_pusat_mm} mm`
+                      : "-"}
+                  </td>
+                  <td
+                    className="text-center font-monospace text-secondary"
+                    style={{ fontSize: "0.72rem" }}
+                  >
+                    ({(h.rawX ?? h.x).toFixed(1)}, {(h.rawY ?? h.y).toFixed(1)})
+                  </td>
+                  <td className="text-center">
+                    <button
+                      type="button"
+                      className={`btn btn-sm py-0 px-1.5 ${
+                        isSelected
+                          ? "btn-info text-dark"
+                          : "btn-outline-secondary text-secondary"
+                      }`}
+                      style={{ fontSize: "0.68rem" }}
+                      title="Sorot tembakan pada lesan"
+                    >
+                      <i className="bi bi-eye"></i>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // Helper render tabel rekap seluruh babak untuk penembak aktif
+  const renderMultiRoundTable = (shooter) => {
+    const babakScores = shooter?.babak_scores || [];
+
+    if (babakScores.length === 0) {
+      return (
+        <div className="text-center py-3 text-secondary small fst-italic">
+          Belum ada riwayat babak
+        </div>
+      );
+    }
+
+    return (
+      <div className="table-responsive">
+        <table
+          className="table table-dark table-hover table-sm mb-0 align-middle"
+          style={{ fontSize: "0.78rem" }}
+        >
+          <thead
+            className="table-secondary text-dark"
+            style={{ fontSize: "0.72rem" }}
+          >
+            <tr>
+              <th>Babak Latihan</th>
+              <th className="text-center">Peluru</th>
+              <th className="text-center">Skor</th>
+              <th className="text-center">Akurasi</th>
+              <th className="text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {babakScores.map((bs, bIdx) => {
+              const isCurrentBabak =
+                String(bs.id_babak) === String(currentBabak?.id_babak) ||
+                String(bs.nomor) === String(currentBabak?.nomor_babak);
+
+              return (
+                <tr
+                  key={bIdx}
+                  style={{
+                    backgroundColor: isCurrentBabak
+                      ? "rgba(59, 130, 246, 0.15)"
+                      : undefined,
+                  }}
+                >
+                  <td className="fw-semibold">
+                    Babak {bs.nomor}: {bs.nama}
+                    {isCurrentBabak && (
+                      <span
+                        className="badge bg-primary ms-1.5"
+                        style={{ fontSize: "0.62rem" }}
+                      >
+                        Aktif
+                      </span>
+                    )}
+                  </td>
+                  <td className="text-center font-monospace">
+                    {bs.hits?.length || 0} / {bs.peluru || 10}
+                  </td>
+                  <td className="text-center font-monospace fw-bold text-white">
+                    {bs.skor}{" "}
+                    <span className="text-secondary fw-normal">
+                      /{bs.max_skor}
+                    </span>
+                  </td>
+                  <td className="text-center font-monospace text-success">
+                    {bs.akurasi}%
+                  </td>
+                  <td className="text-center">
+                    <button
+                      type="button"
+                      className={`btn btn-sm py-0 px-2 ${
+                        isCurrentBabak
+                          ? "btn-primary disabled"
+                          : "btn-outline-primary"
+                      }`}
+                      style={{ fontSize: "0.7rem" }}
+                      onClick={() => {
+                        if (bs.id_babak || bs.nomor) {
+                          setActiveBabakId(String(bs.id_babak || bs.nomor));
+                          setHighlightedHitNomor(null);
+                        }
+                      }}
+                    >
+                      {isCurrentBabak ? "Dipilih" : "Buka Babak"}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   if (loading) {
@@ -847,6 +1466,32 @@ export const LiveScoring = () => {
               </div>
             )}
 
+            {/* TOMBOL TOGGLE HIDE/SHOW TOOLBAR */}
+            <button
+              type="button"
+              className={`btn btn-sm d-flex align-items-center gap-1.5 shadow-sm px-2.5 ${
+                showToolbar
+                  ? "btn-outline-secondary text-light bg-dark"
+                  : "btn-info text-dark fw-bold"
+              }`}
+              onClick={() => setShowToolbar(!showToolbar)}
+              title={
+                showToolbar
+                  ? "Sembunyikan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
+                  : "Tampilkan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
+              }
+            >
+              <i className={`bi ${showToolbar ? "bi-eye-slash" : "bi-eye"}`}></i>
+              <span className="d-none d-sm-inline">
+                {showToolbar ? "Hide Toolbar" : "Show Toolbar"}
+              </span>
+              <i
+                className={`bi ${
+                  showToolbar ? "bi-chevron-up" : "bi-chevron-down"
+                } small ms-0.5`}
+              ></i>
+            </button>
+
             {/* TOMBOL FULLSCREEN */}
             <button
               type="button"
@@ -865,150 +1510,221 @@ export const LiveScoring = () => {
       </header>
 
       {/* 2. SUB-HEADER: GELOMBANG & BABAK CONTROLS, VIEW MODE, & SORT */}
-      <div
-        className="px-3 px-md-4 py-2 border-bottom border-secondary border-opacity-25 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2"
-        style={{ backgroundColor: "rgba(15, 23, 42, 0.75)" }}
-      >
-        {/* Tab Pilihan Gelombang */}
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <span className="small text-secondary fw-semibold text-uppercase tracking-wider">
-            Gelombang:
-          </span>
-          <div className="btn-group btn-group-sm" role="group">
-            {(sesi?.gelombang_list || []).map((g) => (
-              <button
-                key={g.id_gelombang || g.nomor_gelombang}
-                type="button"
-                className={`btn ${activeGelombang === g.nomor_gelombang
-                    ? "btn-primary fw-bold text-white shadow-sm"
-                    : "btn-outline-secondary text-light bg-dark"
-                  }`}
-                onClick={() => setActiveGelombang(g.nomor_gelombang)}
-              >
-                Gelombang {g.nomor_gelombang}
-                <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
-                  {g.penembak?.length || 0} Penembak
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
+      {showToolbar ? (
+        <>
+          <div
+            className="px-3 px-md-4 py-2 border-bottom border-secondary border-opacity-25 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2"
+            style={{ backgroundColor: "rgba(15, 23, 42, 0.75)" }}
+          >
+            {/* Tab Pilihan Gelombang */}
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <span className="small text-secondary fw-semibold text-uppercase tracking-wider">
+                Gelombang:
+              </span>
+              <div className="btn-group btn-group-sm" role="group">
+                {(sesi?.gelombang_list || []).map((g) => (
+                  <button
+                    key={g.id_gelombang || g.nomor_gelombang}
+                    type="button"
+                    className={`btn ${activeGelombang === g.nomor_gelombang
+                        ? "btn-primary fw-bold text-white shadow-sm"
+                        : "btn-outline-secondary text-light bg-dark"
+                      }`}
+                    onClick={() => setActiveGelombang(g.nomor_gelombang)}
+                  >
+                    Gelombang {g.nomor_gelombang}
+                    <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
+                      {g.penembak?.length || 0} Penembak
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Tab Pilihan Babak */}
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <span className="small text-secondary fw-semibold text-uppercase tracking-wider">
-            Babak Latihan:
-          </span>
-          <div className="btn-group btn-group-sm" role="group">
-            {currentBabakList.map((b) => {
-              const isSelected =
-                String(activeBabakId) ===
-                String(b.id_babak || b.nomor_babak);
-              return (
+            {/* Tab Pilihan Babak */}
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <span className="small text-secondary fw-semibold text-uppercase tracking-wider">
+                Babak Latihan:
+              </span>
+              <div className="btn-group btn-group-sm" role="group">
+                {currentBabakList.map((b) => {
+                  const isSelected =
+                    String(activeBabakId) ===
+                    String(b.id_babak || b.nomor_babak);
+                  return (
+                    <button
+                      key={b.id_babak || b.nomor_babak}
+                      type="button"
+                      className={`btn ${isSelected
+                          ? "btn-success fw-bold text-white shadow-sm"
+                          : "btn-outline-secondary text-light bg-dark"
+                        }`}
+                      onClick={() =>
+                        setActiveBabakId(String(b.id_babak || b.nomor_babak))
+                      }
+                    >
+                      Babak {b.nomor_babak}: {b.nama_babak}
+                      <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
+                        {b.jumlah_peluru || 10} Butir
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* View Mode, Layout Mode, & Sorting Control */}
+            <div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap">
+              {/* Layout Mode: Grid Semua Lane vs Per Orang */}
+              <div className="btn-group btn-group-sm" role="group">
                 <button
-                  key={b.id_babak || b.nomor_babak}
                   type="button"
-                  className={`btn ${isSelected
-                      ? "btn-success fw-bold text-white shadow-sm"
+                  className={`btn ${
+                    scoringViewMode === "grid"
+                      ? "btn-primary fw-bold text-white shadow-sm"
                       : "btn-outline-secondary text-light bg-dark"
-                    }`}
-                  onClick={() =>
-                    setActiveBabakId(String(b.id_babak || b.nomor_babak))
-                  }
+                  }`}
+                  onClick={() => setScoringViewMode("grid")}
+                  title="Tampilkan semua jalur latihan sekaligus (Mode Grid)"
                 >
-                  Babak {b.nomor_babak}: {b.nama_babak}
-                  <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
-                    {b.jumlah_peluru || 10} Butir
-                  </span>
+                  <i className="bi bi-grid-3x3-gap-fill me-1"></i> Semua Lane
                 </button>
-              );
-            })}
+                <button
+                  type="button"
+                  className={`btn ${
+                    scoringViewMode === "individual"
+                      ? "btn-warning fw-bold text-dark shadow-sm"
+                      : "btn-outline-secondary text-light bg-dark"
+                  }`}
+                  onClick={() => {
+                    setScoringViewMode("individual");
+                    if (!selectedShooterId && displayedShooters.length > 0) {
+                      setSelectedShooterId(displayedShooters[0].id_personel_penembak);
+                    }
+                  }}
+                  title="Fokus detail tembakan per penembak (Livescore Per Orang)"
+                >
+                  <i className="bi bi-person-bounding-box me-1"></i> Per Orang
+                </button>
+              </div>
+
+              {/* Visualizer Mode: SVG / Foto AI / Split */}
+              <div className="btn-group btn-group-sm" role="group">
+                <button
+                  type="button"
+                  className={`btn ${
+                    viewMode === "svg"
+                      ? "btn-info text-dark fw-bold"
+                      : "btn-outline-secondary text-light"
+                  }`}
+                  onClick={() => setViewMode("svg")}
+                  title="Tampilkan Target Lesan Vektor"
+                >
+                  <i className="bi bi-bullseye me-1"></i> Lesan SVG
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${
+                    viewMode === "foto"
+                      ? "btn-info text-dark fw-bold"
+                      : "btn-outline-secondary text-light"
+                  }`}
+                  onClick={() => setViewMode("foto")}
+                  title="Tampilkan Foto Kamera Deteksi AI"
+                >
+                  <i className="bi bi-camera me-1"></i> Foto AI
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${
+                    viewMode === "split"
+                      ? "btn-info text-dark fw-bold"
+                      : "btn-outline-secondary text-light"
+                  }`}
+                  onClick={() => setViewMode("split")}
+                  title="Tampilkan Target Vektor & Foto Kamera Berdampingan"
+                >
+                  <i className="bi bi-layout-split me-1"></i> Split
+                </button>
+              </div>
+
+              {/* Sorting Control (Hanya relevan di Mode Grid) */}
+              {scoringViewMode === "grid" && (
+                <div className="btn-group btn-group-sm" role="group">
+                  <button
+                    type="button"
+                    className={`btn ${
+                      sortBy === "lane"
+                        ? "btn-light text-dark fw-bold"
+                        : "btn-outline-secondary text-light"
+                    }`}
+                    onClick={() => setSortBy("lane")}
+                    title="Urutkan berdasarkan Nomor Jalur"
+                  >
+                    <i className="bi bi-sort-numeric-down me-1"></i> Jalur
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn ${
+                      sortBy === "score"
+                        ? "btn-light text-dark fw-bold"
+                        : "btn-outline-secondary text-light"
+                    }`}
+                    onClick={() => setSortBy("score")}
+                    title="Urutkan berdasarkan Peringkat Skor Tertinggi"
+                  >
+                    <i className="bi bi-trophy me-1 text-warning"></i> Skor
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* View Mode & Sorting Control */}
-        <div className="d-flex align-items-center gap-2 ms-md-auto flex-wrap">
-          <div className="btn-group btn-group-sm" role="group">
-            <button
-              type="button"
-              className={`btn ${viewMode === "svg"
-                  ? "btn-info text-dark fw-bold"
-                  : "btn-outline-secondary text-light"
-                }`}
-              onClick={() => setViewMode("svg")}
-              title="Tampilkan Target Lesan Vektor"
-            >
-              <i className="bi bi-bullseye me-1"></i> Lesan SVG
-            </button>
-            <button
-              type="button"
-              className={`btn ${viewMode === "foto"
-                  ? "btn-info text-dark fw-bold"
-                  : "btn-outline-secondary text-light"
-                }`}
-              onClick={() => setViewMode("foto")}
-              title="Tampilkan Foto Kamera Deteksi AI"
-            >
-              <i className="bi bi-camera me-1"></i> Foto AI
-            </button>
-            <button
-              type="button"
-              className={`btn ${viewMode === "split"
-                  ? "btn-info text-dark fw-bold"
-                  : "btn-outline-secondary text-light"
-                }`}
-              onClick={() => setViewMode("split")}
-              title="Tampilkan Target Vektor & Foto Kamera Berdampingan"
-            >
-              <i className="bi bi-layout-split me-1"></i> Split
-            </button>
+          {/* 3. PODIUM & STATISTIK GELOMBANG STRIP */}
+          <div
+            className="px-3 px-md-4 py-2 border-bottom border-secondary border-opacity-25 text-secondary d-flex justify-content-between align-items-center flex-wrap gap-2"
+            style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+          >
+            <div className="d-flex align-items-center gap-3 flex-wrap">
+              <span>
+                Rerata Skor Gelombang:{" "}
+                <strong className="text-primary fs-6">{avgWaveScore}</strong> /{" "}
+                {(currentBabak?.jumlah_peluru || 10) * 10}
+              </span>
+              <span>•</span>
+              <span>
+                Rerata Akurasi:{" "}
+                <strong className="text-success fs-6">{avgWaveAccuracy}%</strong>
+              </span>
+            </div>
+
+            {scoringViewMode === "individual" && activeShooter && (
+              <div className="d-flex align-items-center gap-2">
+                <span
+                  className="badge bg-warning text-dark fw-bold py-1 px-2.5 d-flex align-items-center gap-1 shadow-sm"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  <i className="bi bi-person-fill"></i>
+                  <span>Fokus: Jalur {activeShooter.lane} - {activeShooter.nama}</span>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary text-light py-0 px-2"
+                  style={{ fontSize: "0.75rem" }}
+                  onClick={() => setScoringViewMode("grid")}
+                >
+                  <i className="bi bi-grid-3x3-gap me-1"></i> Semua Lane
+                </button>
+              </div>
+            )}
           </div>
+        </>
+      ) : (
+        /* STATUS STRIP RINGKAS SAAT TOOLBAR DI-HIDE */
+        <></>
+      )}
 
-          <div className="btn-group btn-group-sm" role="group">
-            <button
-              type="button"
-              className={`btn ${sortBy === "lane"
-                  ? "btn-light text-dark fw-bold"
-                  : "btn-outline-secondary text-light"
-                }`}
-              onClick={() => setSortBy("lane")}
-              title="Urutkan berdasarkan Nomor Jalur"
-            >
-              <i className="bi bi-sort-numeric-down me-1"></i> Jalur
-            </button>
-            <button
-              type="button"
-              className={`btn ${sortBy === "score"
-                  ? "btn-light text-dark fw-bold"
-                  : "btn-outline-secondary text-light"
-                }`}
-              onClick={() => setSortBy("score")}
-              title="Urutkan berdasarkan Peringkat Skor Tertinggi"
-            >
-              <i className="bi bi-trophy me-1 text-warning"></i> Skor
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. PODIUM & STATISTIK GELOMBANG STRIP */}
-      <div
-        className="px-3 px-md-4 py-2 border-bottom border-secondary border-opacity-25 text-secondary"
-        style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
-      >
-          {/* Rerata Gelombang */}
-            <span className="me-3">
-              Rerata Skor:{" "}
-              <strong className="text-primary fs-6">{avgWaveScore}</strong> /{" "}
-              {(currentBabak?.jumlah_peluru || 10) * 10}
-            </span>
-            <span>
-              Rerata Akurasi:{" "}
-              <strong className="text-success fs-6">{avgWaveAccuracy}%</strong>
-            </span>
-      </div>
-
-      {/* 4. MAIN LIVE SCOREBOARD GRID: SEMUA PENEMBAK DALAM SATU BABAK & GELOMBANG */}
+      {/* 4. MAIN LIVE SCOREBOARD: GRID SEMUA LANE ATAU FOKUS INDIVIDUAL PER ORANG */}
       <main className="flex-grow-1 p-3 p-md-4 overflow-y-auto">
         {displayedShooters.length === 0 ? (
           <div className="text-center p-5 bg-dark bg-opacity-50 rounded-4 border border-secondary border-opacity-25 my-5">
@@ -1028,7 +1744,315 @@ export const LiveScoring = () => {
               Kembali ke Detail Sesi
             </button>
           </div>
+        ) : scoringViewMode === "individual" && activeShooter ? (
+          /* ============================================================ */
+          /* MODE FOKUS PERORANGAN (LIVESCORE PER ORANG)                  */
+          /* ============================================================ */
+          <div className="d-flex flex-column gap-3">
+            
+
+            {/* B. KARTU IDENTITAS PENEMBAK & LIVE KPI BANNER */}
+            <div
+              className="card border-0 shadow-lg p-3 rounded-4 overflow-hidden position-relative"
+              style={{
+                backgroundColor: "rgba(15, 23, 42, 0.95)",
+                backgroundImage:
+                  "radial-gradient(ellipse at 10% 20%, rgba(14, 165, 233, 0.12) 0%, rgba(15, 23, 42, 0.98) 70%)",
+                border: "1px solid rgba(14, 165, 233, 0.25)",
+              }}
+            >
+              <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+                {/* Identitas Penembak */}
+                <div className="d-flex align-items-center gap-3">
+                  <div
+                    className="badge bg-warning text-dark fw-bolder px-3 py-2.5 rounded-3 shadow d-flex flex-column align-items-center justify-content-center"
+                    style={{ minWidth: "90px" }}
+                  >
+                    <span style={{ fontSize: "0.68rem", letterSpacing: "1px" }}>JALUR</span>
+                    <span className="fs-3 lh-1">{activeShooter.lane}</span>
+                  </div>
+
+                  <div>
+                    <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                      <h3 className="fw-bold text-white mb-0">{activeShooter.nama}</h3>
+                      {renderBadgeKategori(activeShooter.currentKategori)}
+                    </div>
+                    <div className="text-secondary small d-flex align-items-center gap-2 flex-wrap">
+                      <span>NRP: <strong className="text-light">{activeShooter.nrp || "-"}</strong></span>
+                      <span>•</span>
+                      <span>Satuan: <strong className="text-light">{activeShooter.satuan || "-"}</strong></span>
+                      <span>•</span>
+                      <span>
+                        Babak Aktif:{" "}
+                        <strong className="text-warning">
+                          Babak {currentBabak?.nomor_babak} ({currentBabak?.nama_babak})
+                        </strong>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4 Mini KPI Cards */}
+                <div className="row g-2 flex-grow-1 flex-lg-grow-0" style={{ minWidth: "460px" }}>
+                  <div className="col-6 col-sm-3">
+                    <div
+                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                    >
+                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
+                        Skor Babak {currentBabak?.nomor_babak}
+                      </small>
+                      <div className="fw-bold fs-4 text-warning my-0.5">
+                        {activeShooter.currentBabakScore}
+                        <span className="text-secondary fs-6 fw-normal">/{activeShooter.currentBabakMax}</span>
+                      </div>
+                      <div className="progress bg-dark" style={{ height: "4px" }}>
+                        <div
+                          className="progress-bar bg-warning"
+                          style={{
+                            width: `${Math.min(100, (activeShooter.currentBabakScore / (activeShooter.currentBabakMax || 1)) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                      <small className="text-white-50 d-block mt-1" style={{ fontSize: "0.65rem" }}>
+                        Akurasi: {activeShooter.currentBabakAkurasi}%
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-sm-3">
+                    <div
+                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                    >
+                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
+                        Bullseye (10 / X)
+                      </small>
+                      <div className="fw-bold fs-4 text-danger my-0.5">
+                        {activeShooter.currentBabakBullseye}
+                        <span className="text-secondary fs-6 fw-normal"> Butir</span>
+                      </div>
+                      <small className="text-secondary d-block mt-2" style={{ fontSize: "0.68rem" }}>
+                        Peluru: <strong className="text-light">{activeShooter.currentBabakHits.length}</strong> / {currentBabak?.jumlah_peluru || 10}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-sm-3">
+                    <div
+                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                    >
+                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
+                        Grouping & MPI
+                      </small>
+                      <div className="fw-bold fs-6 text-info my-2">
+                        ±{activeShooter.currentBabakBallistics.grouping ?? "-"} <span className="fs-6 fw-normal">mm</span>
+                      </div>
+                      <small className="text-secondary d-block" style={{ fontSize: "0.65rem" }}>
+                        Offset: X {activeShooter.currentBabakBallistics.offsetX !== null && activeShooter.currentBabakBallistics.offsetX !== undefined ? `${activeShooter.currentBabakBallistics.offsetX > 0 ? "+" : ""}${activeShooter.currentBabakBallistics.offsetX}` : 0} | Y {activeShooter.currentBabakBallistics.offsetY !== null && activeShooter.currentBabakBallistics.offsetY !== undefined ? `${activeShooter.currentBabakBallistics.offsetY > 0 ? "+" : ""}${activeShooter.currentBabakBallistics.offsetY}` : 0}
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="col-6 col-sm-3">
+                    <div
+                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                    >
+                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
+                        Total
+                      </small>
+                      <div className="fw-bold fs-4 text-success my-0.5">
+                        {activeShooter.total_skor}
+                        <span className="text-secondary fs-6 fw-normal">/{activeShooter.total_max}</span>
+                      </div>
+                      <small className="text-success d-block mt-2" style={{ fontSize: "0.68rem" }}>
+                        Akurasi : <strong>{activeShooter.akurasi_akhir}%</strong>
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* C. DUA KOLOM: VISUAL TARGET DI KIRI & ANALISIS / TABEL DETAIL DI KANAN */}
+            <div className="row g-3">
+              {/* KOLOM KIRI: TARGET VISUALIZER & KAMERA DETEKSI */}
+              <div className="col-12 col-xl-6">
+                <div
+                  className="card border-0 shadow-lg rounded-4 overflow-hidden h-100"
+                  style={{
+                    backgroundColor: "rgba(15, 23, 42, 0.9)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  <div
+                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2"
+                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+                  >
+                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
+                      <i className="bi bi-bullseye text-danger"></i>
+                      Visualisasi Sasaran Tembak (Babak {currentBabak?.nomor_babak})
+                    </span>
+
+                    <div className="btn-group btn-group-sm" role="group">
+                      <button
+                        type="button"
+                        className={`btn ${viewMode === "svg" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        onClick={() => setViewMode("svg")}
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        <i className="bi bi-bullseye me-1"></i> Lesan SVG
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${viewMode === "foto" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        onClick={() => setViewMode("foto")}
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        <i className="bi bi-camera me-1"></i> Foto AI
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn ${viewMode === "split" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        onClick={() => setViewMode("split")}
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        <i className="bi bi-layout-split me-1"></i> Split
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="card-body p-3 d-flex flex-column align-items-center justify-content-center">
+                    {/* Render Berdasarkan ViewMode */}
+                    {viewMode === "split" ? (
+                      <div className="row g-2 w-100 align-items-center">
+                        <div className="col-12 col-md-6 text-center">
+                          <div className="bg-black rounded-3 p-2 shadow position-relative mx-auto" style={{ maxWidth: "340px" }}>
+                            {renderLargeSvgTarget(activeShooter)}
+                            <small className="text-secondary d-block mt-1" style={{ fontSize: "0.68rem" }}>
+                              Lesan Vektor SVG
+                            </small>
+                          </div>
+                        </div>
+                        <div className="col-12 col-md-6 text-center">
+                          <div
+                            className="bg-black rounded-3 p-2 shadow d-flex flex-column align-items-center justify-content-center mx-auto"
+                            style={{ maxWidth: "340px", minHeight: "260px" }}
+                          >
+                            {renderPhotoTarget(activeShooter)}
+                            <small className="text-secondary d-block mt-1" style={{ fontSize: "0.68rem" }}>
+                              Foto Deteksi SITRAK-Detect
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                    ) : viewMode === "foto" ? (
+                      <div className="w-100 text-center py-2">
+                        <div
+                          className="bg-black rounded-3 p-2 shadow mx-auto d-flex flex-column align-items-center justify-content-center"
+                          style={{ maxWidth: "440px", minHeight: "340px" }}
+                        >
+                          {renderPhotoTarget(activeShooter)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-100 text-center py-2">
+                        <div className="bg-black rounded-3 p-2 shadow mx-auto position-relative" style={{ maxWidth: "420px" }}>
+                          {renderLargeSvgTarget(activeShooter)}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ringkasan Indikator / Legend Target */}
+                    <div className="mt-3 pt-2 border-top border-secondary border-opacity-25 w-100 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                      <div className="d-flex align-items-center gap-2 flex-wrap" style={{ fontSize: "0.72rem" }}>
+                        <span className="text-secondary">Keterangan:</span>
+                        <span className="badge bg-danger text-white">● 10 / X (Bullseye)</span>
+                        <span className="badge bg-success text-white">● Ring 9</span>
+                        <span className="badge bg-info text-dark">● Ring 8</span>
+                        <span className="badge bg-warning text-dark">● Ring ≤ 7</span>
+                      </div>
+                      {highlightedHitNomor && (
+                        <span className="badge bg-info text-dark fw-bold animate-pulse" style={{ fontSize: "0.72rem" }}>
+                          Menyorot Peluru #{highlightedHitNomor}
+                          <button
+                            type="button"
+                            className="btn-close btn-close-white ms-1"
+                            style={{ fontSize: "0.55rem" }}
+                            onClick={() => setHighlightedHitNomor(null)}
+                          />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* KOLOM KANAN: CATATAN TAKTIS & TABEL DETAIL TEMBAKAN & RIWAYAT BABAK */}
+              <div className="col-12 col-xl-6 d-flex flex-column gap-3">
+                {/* 1. CATATAN ANALISIS TAKTIS */}
+                {renderIndividualAnalysis(activeShooter)}
+
+                {/* 2. TABEL RINCIAN TIAP BUTIR TEMBAKAN */}
+                <div
+                  className="card border-0 shadow-lg rounded-4 overflow-hidden"
+                  style={{
+                    backgroundColor: "rgba(15, 23, 42, 0.9)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  <div
+                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+                  >
+                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
+                      <i className="bi bi-list-ol text-warning"></i>
+                      Rincian Tembakan Tiap Butir (Babak {currentBabak?.nomor_babak})
+                    </span>
+                    <span className="badge bg-secondary text-light small" style={{ fontSize: "0.68rem" }}>
+                      {activeShooter.currentBabakHits.length} Butir Terdeteksi
+                    </span>
+                  </div>
+
+                  <div className="card-body p-0">
+                    {renderShotByShotTable(activeShooter)}
+                  </div>
+                </div>
+
+                {/* 3. REKAP SELURUH BABAK UNTUK PENEMBAK INI */}
+                <div
+                  className="card border-0 shadow-lg rounded-4 overflow-hidden"
+                  style={{
+                    backgroundColor: "rgba(15, 23, 42, 0.9)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  <div
+                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+                  >
+                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
+                      <i className="bi bi-clipboard2-data text-primary"></i>
+                      Rekapitulasi Riwayat Seluruh Babak Sesi Ini
+                    </span>
+                    <span className="text-secondary small" style={{ fontSize: "0.7rem" }}>
+                      Klik babak untuk melihat detail live
+                    </span>
+                  </div>
+
+                  <div className="card-body p-0">
+                    {renderMultiRoundTable(activeShooter)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
+          /* ============================================================ */
+          /* MODE GRID (SEMUA LANE)                                       */
+          /* ============================================================ */
           <div className="row g-3 g-xl-4 align-items-stretch">
             {displayedShooters.map((shooter) => {
               const rank =
@@ -1403,6 +2427,144 @@ export const LiveScoring = () => {
                           Belum ada data tembakan
                         </div>
                       )}
+                    </div>
+
+                    {/* CATATAN ANALISIS & REKOMENDASI TAKTIS */}
+                    {(() => {
+                      const rawCatatan =
+                        shooter.currentBabakCatatan ||
+                        shooter.currentBabakBallistics?.catatan;
+                      const parsed = parseCatatanAnalisis(rawCatatan);
+                      const hasCatatan = Boolean(
+                        rawCatatan &&
+                          (parsed.items.length > 0 || parsed.warning)
+                      );
+
+                      return (
+                        <div
+                          className="p-3 border-top border-secondary border-opacity-25"
+                          style={{
+                            backgroundColor: "rgba(10, 15, 29, 0.6)",
+                          }}
+                        >
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span
+                              className="text-info fw-semibold d-flex align-items-center gap-1"
+                              style={{ fontSize: "0.72rem" }}
+                            >
+                              <i className="bi bi-chat-left-text-fill text-info"></i>
+                              Catatan Analisis:
+                            </span>
+                            {shooter.currentBabakBallistics?.status && (
+                              <span
+                                className="badge bg-primary text-white"
+                                style={{ fontSize: "0.62rem" }}
+                              >
+                                {shooter.currentBabakBallistics.status}
+                              </span>
+                            )}
+                          </div>
+
+                          {hasCatatan ? (
+                            <div>
+                              {parsed.warning && (
+                                <div
+                                  className="alert alert-warning py-1 px-2 mb-1 border border-warning border-opacity-50 text-warning-emphasis d-flex align-items-start gap-1"
+                                  style={{
+                                    fontSize: "0.68rem",
+                                    backgroundColor: "rgba(234, 179, 8, 0.12)",
+                                    lineHeight: 1.3,
+                                  }}
+                                >
+                                  <i
+                                    className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      marginTop: "1px",
+                                    }}
+                                  ></i>
+                                  <div>
+                                    <strong className="text-warning">
+                                      Koreksi Kuota:
+                                    </strong>{" "}
+                                    {parsed.warning.replace(
+                                      /^Peringatan Kuota Peluru:\s*/i,
+                                      ""
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {parsed.items.length > 1 ? (
+                                <ul
+                                  className="mb-0 ps-3 text-white-50"
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    lineHeight: 1.45,
+                                    maxHeight: "85px",
+                                    overflowY: "auto",
+                                  }}
+                                >
+                                  {parsed.items.map((item, idx) => (
+                                    <li key={idx} className="mb-1 text-light">
+                                      {item}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p
+                                  className="mb-0 text-light"
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    lineHeight: 1.45,
+                                    maxHeight: "85px",
+                                    overflowY: "auto",
+                                  }}
+                                >
+                                  {parsed.items[0] || rawCatatan}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <div
+                              className="text-secondary small fst-italic py-1"
+                              style={{ fontSize: "0.72rem" }}
+                            >
+                              Belum ada catatan analisis tembakan
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* TOMBOL AKSI: LIHAT LIVESCORE PER ORANG */}
+                    <div
+                      className="p-2.5 px-3 border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
+                    >
+                      <span
+                        className="text-secondary small text-truncate me-2"
+                        style={{ fontSize: "0.7rem" }}
+                      >
+                        {shooter.nrp
+                          ? `NRP ${shooter.nrp}`
+                          : shooter.satuan || `Jalur ${shooter.lane}`}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-info fw-semibold py-1 px-2.5 d-flex align-items-center gap-1.5 shadow-sm text-nowrap"
+                        style={{ fontSize: "0.74rem" }}
+                        onClick={() => {
+                          setSelectedShooterId(shooter.id_personel_penembak);
+                          setHighlightedHitNomor(null);
+                          setScoringViewMode("individual");
+                        }}
+                        title={`Buka mode livescore detail per orang untuk ${shooter.nama}`}
+                      >
+                        <i className="bi bi-person-bounding-box text-info"></i>
+                        <span>Livescore Per Orang</span>
+                        <i className="bi bi-arrow-right small text-info opacity-75"></i>
+                      </button>
                     </div>
                   </div>
                 </div>

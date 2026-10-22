@@ -3,8 +3,15 @@ import {
   detectTargetViaUpload,
   getDetectApiUrl,
   checkDetectHealth,
+  fetchAvailableEngines,
   selectBestShots,
+  testGeminiApiKey,
 } from "../../services/sitrakDetectService";
+import {
+  hasGeminiApiKey,
+  getGeminiModel,
+} from "../../services/apiConfig";
+
 
 /**
  * Modal Unggah & Analisa Foto Perkenaan Target menggunakan Layanan SITRAK-Detect (Computer Vision)
@@ -232,6 +239,45 @@ export const ModalUploadTargetDetect = ({
   // Parameter deteksi
   const [targetType, setTargetType] = useState("issf_standard_10_ring");
   const [caliberMm, setCaliberMm] = useState("4.5");
+  const [selectedEngine, setSelectedEngine] = useState("model_sendiri");
+  const [availableEngines, setAvailableEngines] = useState([
+    {
+      id: "model_sendiri",
+      name: "Model Sendiri (Local YOLO & Classical CV)",
+      type: "local_vision",
+      model: "YOLO + CV Ensemble",
+      is_available: true,
+      description:
+        "Deteksi lokal otomatis menggunakan model YOLO terlatih dan algoritma Computer Vision.",
+    },
+    {
+      id: "yolo26",
+      name: "YOLO26 (Small-Target Puncture Detector)",
+      type: "local_deep_learning",
+      model: "bullet_hole_yolo26.pt",
+      is_available: true,
+      description:
+        "Arsitektur YOLO26 dengan STAL (Small-Target-Aware Label Assignment) khusus target Krüger.",
+    },
+    {
+      id: "yolo11",
+      name: "YOLO11 (Ultralytics High-Precision Detector)",
+      type: "local_deep_learning",
+      model: "bullet_hole_yolo11.pt",
+      is_available: true,
+      description:
+        "Arsitektur Ultralytics YOLO11 terlatih untuk deteksi sasaran tembak Krüger.",
+    },
+    {
+      id: "gemini",
+      name: "Google Gemini Cloud AI",
+      type: "cloud_multimodal_ai",
+      model: "gemini-3.8-flash",
+      is_available: true,
+      description:
+        "Model multimodal vision Google Gemini untuk deteksi sasaran tembak berbasis cloud.",
+    },
+  ]);
 
   // State berkas gambar
   const [selectedFile, setSelectedFile] = useState(null);
@@ -257,6 +303,26 @@ export const ModalUploadTargetDetect = ({
 
   // Tooltip hovered shot
   const [hoveredShot, setHoveredShot] = useState(null);
+
+  // State Pengujian Gemini API Key
+  const [geminiTestStatus, setGeminiTestStatus] = useState(null);
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+
+  const handleTestGeminiKey = async () => {
+    setIsTestingGemini(true);
+    setGeminiTestStatus(null);
+    try {
+      const res = await testGeminiApiKey();
+      setGeminiTestStatus(res);
+    } catch (e) {
+      setGeminiTestStatus({
+        valid: false,
+        message: e.message || "Gagal menguji Gemini API Key.",
+      });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
 
   const fileInputRef = useRef(null);
 
@@ -461,6 +527,24 @@ export const ModalUploadTargetDetect = ({
         });
       });
 
+      // Ambil daftar engine deteksi yang tersedia dari sitrak-detect
+      fetchAvailableEngines(currentUrl)
+        .then((engRes) => {
+          if (engRes && engRes.engines && engRes.engines.length > 0) {
+            setAvailableEngines(engRes.engines);
+            const def = engRes.defaultEngine || engRes.default_engine;
+            if (def) {
+              setSelectedEngine((prev) => {
+                const exists = engRes.engines.some((e) => e.id === prev);
+                return exists ? prev : def;
+              });
+            }
+          }
+        })
+        .catch((err) => {
+          console.warn("Gagal memuat engine dari SITRAK-Detect:", err);
+        });
+
       if (initialShooter?.id_personel_penembak) {
         setSelectedShooterId(String(initialShooter.id_personel_penembak));
       } else if (sesiData?.gelombang_list?.[0]?.penembak?.[0]) {
@@ -508,6 +592,12 @@ export const ModalUploadTargetDetect = ({
         String(b.nomor_babak) === String(selectedBabakId)
     ) ||
     allBabak[0] ||
+    null;
+
+  // Objek metadata engine deteksi yang sedang dipilih
+  const selectedEngineObj =
+    availableEngines.find((e) => e.id === selectedEngine) ||
+    availableEngines[0] ||
     null;
 
   // Handler pemilihan berkas gambar
@@ -563,32 +653,71 @@ export const ModalUploadTargetDetect = ({
         ? `Terkoneksi ke SITRAK-Detect (${url})`
         : `Gagal terhubung ke ${url}. Pastikan service SITRAK-Detect aktif.`,
     });
+
+    if (res.online) {
+      try {
+        const engRes = await fetchAvailableEngines(url);
+        if (engRes && engRes.engines && engRes.engines.length > 0) {
+          setAvailableEngines(engRes.engines);
+          const def = engRes.defaultEngine || engRes.default_engine;
+          if (def) {
+            setSelectedEngine((prev) => {
+              const exists = engRes.engines.some((e) => e.id === prev);
+              return exists ? prev : def;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal memuat ulang engine:", err);
+      }
+    }
   };
 
-  // Jalankan deteksi melalui sitrak-detect
+  // Jalankan deteksi melalui sitrak-detect atau Google Gemini Cloud AI
   const handleRunDetection = async () => {
     if (!selectedFile) {
       setErrorMsg("Silakan pilih atau seret foto sasaran tembak terlebih dahulu.");
       return;
     }
 
+    const isGemini = selectedEngine === "gemini";
+    if (isGemini && !hasGeminiApiKey()) {
+      setErrorMsg(
+        "Kunci API Google Gemini belum diatur di file .env. Silakan tambahkan 'REACT_APP_GEMINI_API_KEY=kunci_anda' pada .env lalu muat ulang halaman."
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setErrorMsg(null);
-    setProcessingStep("Mengirim citra sasaran ke service sitrak-detect...");
 
-    try {
+    if (isGemini) {
+      setProcessingStep("Mengirim citra sasaran ke Google Gemini Multimodal Vision API...");
+      setTimeout(() => {
+        setProcessingStep(
+          "Menganalisis perkenaan lubang peluru & skoring cincin presisi dengan AI..."
+        );
+      }, 1200);
+      setTimeout(() => {
+        setProcessingStep(
+          "Menghitung metrik dispersi, bias arah, & menghasilkan visualisasi anotasi..."
+        );
+      }, 2800);
+    } else {
+      setProcessingStep("Mengirim citra sasaran ke service sitrak-detect...");
       setTimeout(() => {
         setProcessingStep(
           "Memproses koreksi perspektif & segmentasi lingkaran cincin..."
         );
       }, 1000);
-
       setTimeout(() => {
         setProcessingStep(
           "Mendeteksi lubang peluru, skoring nilai, & analisis sebaran mm..."
         );
       }, 2500);
+    }
 
+    try {
       const effectiveUrl = getDetectApiUrl();
 
       const res = await detectTargetViaUpload(
@@ -599,6 +728,7 @@ export const ModalUploadTargetDetect = ({
           namaPenembak: currentShooter?.nama || "Penembak",
           nomorBabak: currentBabak?.nomor_babak || 1,
           jumlahPeluru: currentBabak?.jumlah_peluru || 10,
+          engine: selectedEngine,
         },
         effectiveUrl
       );
@@ -606,10 +736,12 @@ export const ModalUploadTargetDetect = ({
       setAnalysisResult(res);
       setViewMode(res.annotated_image_url ? "annotated" : "svg");
     } catch (err) {
-      console.error("Gagal mendeteksi target dengan sitrak-detect:", err);
+      console.error("Gagal mendeteksi target:", err);
       setErrorMsg(
         err.message ||
-          "Gagal memproses gambar target. Pastikan service sitrak-detect berjalan di port 8000."
+          (isGemini
+            ? "Gagal memproses gambar dengan Google Gemini API. Periksa kembali kuota atau validitas API key di .env."
+            : "Gagal memproses gambar target. Pastikan service sitrak-detect berjalan di port 8000.")
       );
     } finally {
       setIsProcessing(false);
@@ -645,9 +777,7 @@ export const ModalUploadTargetDetect = ({
         raw_total_shots: analysisResult.shots?.length || 0,
         quota_exceeded: selection.isQuotaExceeded,
         excess_count: selection.excessCount,
-        rekomendasi_utama: selection.isQuotaExceeded
-          ? `[Peringatan Kuota Peluru: Terdeteksi ${analysisResult.shots?.length || 0} butir (${selection.excessCount} butir melebihi alokasi ${quota} peluru). Diambil ${quota} tembakan terbaik dengan nilai tertinggi (${selection.totalScore} Poin)]. ${analysisResult.rekomendasi_utama || ""}`
-          : analysisResult.rekomendasi_utama,
+        rekomendasi_utama: analysisResult.rekomendasi_utama,
       };
 
       if (onApplyResult) {
@@ -1190,6 +1320,157 @@ export const ModalUploadTargetDetect = ({
                       Parameter Deteksi Target:
                     </h6>
 
+                    {/* Pilihan Engine Deteksi SITRAK-Detect */}
+                    <div className="p-2 mb-2 rounded border bg-body-tertiary">
+                      <div className="d-flex align-items-center justify-content-between mb-1">
+                        <label className="form-label small text-dark mb-0 fw-bold d-flex align-items-center gap-1">
+                          <i className="bi bi-cpu text-primary"></i>
+                          Engine Deteksi:
+                        </label>
+                        {selectedEngineObj && (
+                          <span
+                            className={`badge ${
+                              selectedEngineObj.type === "cloud_multimodal_ai"
+                                ? "bg-info-subtle text-info border border-info"
+                                : selectedEngineObj.type === "local_deep_learning"
+                                ? "bg-primary-subtle text-primary border border-primary"
+                                : "bg-success-subtle text-success border border-success"
+                            }`}
+                            style={{ fontSize: "0.68rem" }}
+                          >
+                            {selectedEngineObj.type === "cloud_multimodal_ai"
+                              ? "Cloud AI"
+                              : selectedEngineObj.type === "local_deep_learning"
+                              ? "Deep Learning PT"
+                              : "Hybrid Local CV"}
+                          </span>
+                        )}
+                      </div>
+                      <select
+                        className="form-select form-select-sm fw-semibold"
+                        value={selectedEngine}
+                        onChange={(e) => setSelectedEngine(e.target.value)}
+                        disabled={isProcessing}
+                      >
+                        {availableEngines.map((eng) => (
+                          <option
+                            key={eng.id}
+                            value={eng.id}
+                            disabled={eng.is_available === false}
+                          >
+                            {eng.name}{" "}
+                            {eng.is_available === false ? "(Tidak Tersedia)" : ""}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Panel Status & Konfigurasi Google Gemini Cloud AI */}
+                      {selectedEngine === "gemini" && (
+                        <div className="mt-2 p-2 rounded bg-light border border-info-subtle">
+                          <div className="d-flex align-items-center justify-content-between mb-1">
+                            <span className="small fw-bold text-dark d-flex align-items-center gap-1">
+                              <i className="bi bi-stars text-info"></i>
+                              Status Google Gemini API:
+                            </span>
+                            {hasGeminiApiKey() ? (
+                              <span
+                                className="badge bg-success-subtle text-success border border-success"
+                                style={{ fontSize: "0.68rem" }}
+                              >
+                                <i className="bi bi-key-fill me-1"></i>
+                                API Key Terdeteksi di .env
+                              </span>
+                            ) : (
+                              <span
+                                className="badge bg-warning-subtle text-warning-emphasis border border-warning"
+                                style={{ fontSize: "0.68rem" }}
+                              >
+                                <i className="bi bi-exclamation-triangle-fill me-1"></i>
+                                API Key Belum Diisi (.env)
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            className="text-secondary lh-sm mb-1"
+                            style={{ fontSize: "0.72rem" }}
+                          >
+                            Model aktif:{" "}
+                            <span className="badge bg-secondary-subtle text-dark font-monospace">
+                              {getGeminiModel()}
+                            </span>
+                            {!hasGeminiApiKey() && (
+                              <div className="text-danger mt-1 fw-medium">
+                                <i className="bi bi-info-circle me-1"></i>
+                                Tambahkan <code>REACT_APP_GEMINI_API_KEY=kunci_anda</code> pada berkas <code>.env</code> lalu simpan.
+                              </div>
+                            )}
+                          </div>
+
+                          {hasGeminiApiKey() && (
+                            <div className="mt-2 pt-1 border-top border-secondary-subtle d-flex flex-wrap align-items-center gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-outline-primary btn-sm py-0 px-2 fw-medium"
+                                style={{ fontSize: "0.72rem" }}
+                                onClick={handleTestGeminiKey}
+                                disabled={isTestingGemini}
+                              >
+                                {isTestingGemini ? (
+                                  <>
+                                    <span
+                                      className="spinner-border spinner-border-sm me-1"
+                                      role="status"
+                                      style={{ width: "0.7rem", height: "0.7rem" }}
+                                    ></span>
+                                    Menguji API Key...
+                                  </>
+                                ) : (
+                                  <>
+                                    <i className="bi bi-shield-check me-1"></i>
+                                    Uji Koneksi Gemini
+                                  </>
+                                )}
+                              </button>
+
+                              {geminiTestStatus && (
+                                <span
+                                  className={`small fw-medium ${
+                                    geminiTestStatus.valid ? "text-success" : "text-danger"
+                                  }`}
+                                  style={{ fontSize: "0.72rem" }}
+                                >
+                                  <i
+                                    className={`bi ${
+                                      geminiTestStatus.valid
+                                        ? "bi-check-circle-fill"
+                                        : "bi-x-circle-fill"
+                                    } me-1`}
+                                  ></i>
+                                  {geminiTestStatus.message}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedEngineObj?.description && selectedEngine !== "gemini" && (
+                        <div
+                          className="text-secondary mt-1 lh-sm"
+                          style={{ fontSize: "0.72rem" }}
+                        >
+                          <i className="bi bi-info-circle me-1 text-primary"></i>
+                          {selectedEngineObj.description}
+                          {selectedEngineObj.model && (
+                            <span className="ms-1 font-monospace text-primary fw-semibold">
+                              [{selectedEngineObj.model}]
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="row g-2 mb-3">
                       <div className="col-6">
                         <label className="form-label small text-secondary mb-1">
@@ -1353,12 +1634,26 @@ export const ModalUploadTargetDetect = ({
                       <i className="bi bi-check-circle-fill"></i>
                       Hasil Deteksi & Skoring SITRAK-Detect
                     </h5>
-                    <small className="text-secondary">
-                      Pipeline OpenCV: {analysisResult.model_used} • Waktu:{" "}
-                      {new Date(analysisResult.analyzed_at).toLocaleTimeString(
-                        "id-ID"
+                    <div className="d-flex flex-wrap align-items-center gap-2 mt-1">
+                      <small className="text-secondary">
+                        Pipeline: {analysisResult.model_used || "SITRAK-Detect"} • Waktu:{" "}
+                        {new Date(analysisResult.analyzed_at).toLocaleTimeString(
+                          "id-ID"
+                        )}
+                      </small>
+                      {analysisResult.detection_engine_used && (
+                        <span
+                          className="badge bg-primary-subtle text-primary border border-primary d-inline-flex align-items-center gap-1"
+                          style={{ fontSize: "0.72rem" }}
+                        >
+                          <i className="bi bi-cpu"></i>
+                          Engine:{" "}
+                          {availableEngines.find(
+                            (e) => e.id === analysisResult.detection_engine_used
+                          )?.name || analysisResult.detection_engine_used}
+                        </span>
                       )}
-                    </small>
+                    </div>
                   </div>
 
                   {/* Toggle Mode Tampilan Gambar */}
@@ -1517,12 +1812,22 @@ export const ModalUploadTargetDetect = ({
                         <div>
                           <img
                             src={analysisResult.annotated_image_url}
-                            alt="Hasil Anotasi CV sitrak-detect"
+                            alt="Hasil Anotasi Target"
                             className="img-fluid rounded"
                             style={{ maxHeight: "360px", objectFit: "contain" }}
                           />
                           <div className="text-white-50 small mt-2">
-                            Citra Anotasi Computer Vision (OpenCV)
+                            {analysisResult.detection_engine_used === "gemini" ? (
+                              <span className="text-info">
+                                <i className="bi bi-stars me-1"></i>
+                                Citra Anotasi {analysisResult.model_used || "Google Gemini Cloud AI"}
+                              </span>
+                            ) : (
+                              <span>
+                                <i className="bi bi-cpu text-info me-1"></i>
+                                Citra Anotasi Computer Vision (OpenCV)
+                              </span>
+                            )}
                           </div>
                         </div>
                       ) : (
