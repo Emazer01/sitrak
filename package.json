@@ -21,10 +21,16 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "run" : {
+      "start": "react-scripts start",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "run build": "react-scripts build",
+    "run test": "react-scripts test",
+    "run eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [

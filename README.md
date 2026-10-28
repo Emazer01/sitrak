@@ -1,4 +1,4 @@
-# SITRAK-AI (Sistem Informasi Tracking & Penilaian Menembak)
+# SITRAK-AI (Sistem Analisis Target dan Rekapitulasi Latihan Menembak)
 
 <p align="center">
   <img src="public/SITRAK Tactical Target Emblem.png" alt="SITRAK Emblem" width="180" />
@@ -34,7 +34,7 @@
 
 ## 🎯 Tentang Proyek
 
-**SITRAK-AI** (*Sistem Informasi Tracking & Penilaian Menembak*) adalah aplikasi frontend modern berbasis Single-Page Application (SPA) yang dirancang khusus untuk memodernisasi penilaian, manajemen sesi, pemantauan langsung (*live scoring*), serta evaluasi balistik dalam latihan menembak militer maupun olahraga presisi.
+**SITRAK-AI** (*Sistem Analisis Target dan Rekapitulasi Latihan Menembak*) adalah aplikasi frontend modern berbasis Single-Page Application (SPA) yang dirancang khusus untuk memodernisasi penilaian, manajemen sesi, pemantauan langsung (*live scoring*), serta evaluasi balistik dalam latihan menembak militer maupun olahraga presisi.
 
 Aplikasi ini terhubung secara *real-time* dengan:
 - **Backend API SITRAK**: Manajemen basis data sesi, pembagian gelombang (*waves*), babak (*rounds*), kuota peluru, master data personel, serta pencatatan skor.

@@ -32,6 +32,7 @@ export const LiveScoring = () => {
   const [scoringViewMode, setScoringViewMode] = React.useState("grid"); // 'grid' | 'individual'
   const [selectedShooterId, setSelectedShooterId] = React.useState(null);
   const [highlightedHitNomor, setHighlightedHitNomor] = React.useState(null);
+  const [shotTableViewMode, setShotTableViewMode] = React.useState("breakdown"); // 'breakdown' | 'detail'
   const [showToolbar, setShowToolbar] = React.useState(() => {
     const saved = localStorage.getItem("sitrak_livescore_show_toolbar");
     return saved !== null ? saved === "true" : true;
@@ -637,7 +638,7 @@ export const LiveScoring = () => {
     }
   };
 
-  // Helper render target SVG berukuran besar untuk Mode Individual
+  // Helper render target SVG berukuran besar untuk Mode Individual (Disesuaikan untuk Monitor Atas Jalur)
   const renderLargeSvgTarget = (shooter) => {
     if (!shooter) return null;
     const hits = shooter.currentBabakHits || [];
@@ -646,89 +647,138 @@ export const LiveScoring = () => {
     return (
       <svg
         viewBox="0 0 100 100"
-        className="w-100 h-auto"
-        style={{ maxHeight: "380px" }}
+        className="w-100 h-100"
+        style={{
+          maxWidth: "100%",
+          maxHeight: "65vh",
+          filter: "drop-shadow(0 6px 25px rgba(0, 0, 0, 0.85))",
+        }}
       >
         <defs>
           <filter id="shotGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow
               dx="0"
               dy="0"
-              stdDeviation="1.2"
+              stdDeviation="1.5"
               floodColor="#00f2fe"
-              floodOpacity="0.8"
+              floodOpacity="0.9"
             />
           </filter>
           <filter id="bullGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow
               dx="0"
               dy="0"
-              stdDeviation="1.2"
+              stdDeviation="1.5"
               floodColor="#ff3838"
-              floodOpacity="0.85"
+              floodOpacity="0.95"
             />
           </filter>
         </defs>
 
-        {/* Lingkaran konsentris target ring 1 sampai 10 */}
-        <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="0.8" />
-        <circle cx="50" cy="50" r="43.2" fill="#f1f3f5" stroke="#212529" strokeWidth="0.5" />
-        <circle cx="50" cy="50" r="38.4" fill="#e9ecef" stroke="#212529" strokeWidth="0.5" />
-        <circle cx="50" cy="50" r="33.6" fill="#dee2e6" stroke="#212529" strokeWidth="0.5" />
-        <circle cx="50" cy="50" r="28.8" fill="#ced4da" stroke="#212529" strokeWidth="0.5" />
-        <circle cx="50" cy="50" r="24" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
-        <circle cx="50" cy="50" r="19.2" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
-        <circle cx="50" cy="50" r="14.4" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
-        <circle cx="50" cy="50" r="9.6" fill="#212529" stroke="#ffffff" strokeWidth="0.6" />
-        <circle cx="50" cy="50" r="4.8" fill="#dc3545" stroke="#ffffff" strokeWidth="0.6" />
-        <circle cx="50" cy="50" r="2" fill="#dc3545" stroke="#ffffff" strokeWidth="0.4" />
+        {/* Lingkaran konsentris target ring 1 sampai 10 (Kontras Tinggi Standar EST) */}
+        <circle cx="50" cy="50" r="48" fill="#f8fafc" stroke="#0f172a" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="43.2" fill="#f1f5f9" stroke="#0f172a" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="38.4" fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="33.6" fill="#cbd5e1" stroke="#0f172a" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="28.8" fill="#94a3b8" stroke="#0f172a" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="24" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="19.2" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="14.4" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="9.6" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="4.8" fill="#dc2626" stroke="#ffffff" strokeWidth="0.4" />
+        <circle cx="50" cy="50" r="2" fill="#991b1b" stroke="#ffffff" strokeWidth="0.4" />
 
-        {/* Garis Crosshair / Reticle */}
+        {/* Garis Crosshair / Reticle Presisi */}
         <line
           x1="50"
           y1="2"
           x2="50"
           y2="98"
-          stroke="rgba(255,255,255,0.35)"
-          strokeWidth="0.4"
-          strokeDasharray="1,1"
+          stroke="rgba(0, 242, 254, 0.45)"
+          strokeWidth="0.45"
+          strokeDasharray="1.5,1.5"
         />
         <line
           x1="2"
           y1="50"
           x2="98"
           y2="50"
-          stroke="rgba(255,255,255,0.35)"
-          strokeWidth="0.4"
-          strokeDasharray="1,1"
+          stroke="rgba(0, 242, 254, 0.45)"
+          strokeWidth="0.45"
+          strokeDasharray="1.5,1.5"
         />
 
-        {/* Angka Ring Lesan */}
-        <text x="50" y="4.5" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">1</text>
-        <text x="50" y="9.2" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">2</text>
-        <text x="50" y="14" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">3</text>
-        <text x="50" y="18.8" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">4</text>
-        <text x="50" y="23.6" fill="#495057" fontSize="2.2" fontWeight="bold" textAnchor="middle">5</text>
-        <text x="50" y="28.4" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">6</text>
-        <text x="50" y="33.2" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">7</text>
-        <text x="50" y="38" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">8</text>
-        <text x="50" y="42.8" fill="#ffffff" fontSize="2.2" fontWeight="bold" textAnchor="middle">9</text>
-        <text x="50" y="50.8" fill="#ffffff" fontSize="1.8" fontWeight="bold" textAnchor="middle">X</text>
+        {/* Angka Ring Lesan Sisi Atas (Huruf Tebal & Jelas dari Kejauhan) */}
+        <text x="50" y="5.4" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">1</text>
+        <text x="50" y="10.2" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">2</text>
+        <text x="50" y="15.0" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">3</text>
+        <text x="50" y="19.8" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">4</text>
+        <text x="50" y="24.6" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">5</text>
+        <text x="50" y="29.4" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">6</text>
+        <text x="50" y="34.2" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">7</text>
+        <text x="50" y="39.0" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">8</text>
+        <text x="50" y="43.8" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">9</text>
+        <text x="50" y="51.2" fill="#ffffff" fontSize="2.4" fontWeight="900" textAnchor="middle">X</text>
+
+        {/* Angka Ring Lesan Sisi Bawah (Dual-side Orientation Standar ISSF) */}
+        <text x="50" y="58.2" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">9</text>
+        <text x="50" y="63.0" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">8</text>
+        <text x="50" y="67.8" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">7</text>
+        <text x="50" y="72.6" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">6</text>
+        <text x="50" y="77.4" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">5</text>
+        <text x="50" y="82.2" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">4</text>
+        <text x="50" y="87.0" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">3</text>
+        <text x="50" y="91.8" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">2</text>
+        <text x="50" y="96.6" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">1</text>
+
+        {/* Angka Ring Lesan Sisi Kiri (Huruf Tebal & Jelas dari Kejauhan) */}
+        <text y="51.2" x="4.7" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">1</text>
+        <text y="51.2" x="9.5" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">2</text>
+        <text y="51.2" x="14.3" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">3</text>
+        <text y="51.2" x="19.1" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">4</text>
+        <text y="51.2" x="23.9" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">5</text>
+        <text y="51.2" x="28.7" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">6</text>
+        <text y="51.2" x="33.5" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">7</text>
+        <text y="51.2" x="38.3" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">8</text>
+        <text y="51.2" x="43.1" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">9</text>
+
+        {/* Angka Ring Lesan Sisi Kanan (Huruf Tebal & Jelas dari Kejauhan) */}
+        <text y="51.2" x="57.2" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">9</text>
+        <text y="51.2" x="62" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">8</text>
+        <text y="51.2" x="66.8" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">7</text>
+        <text y="51.2" x="71.6" fill="#ffffff" fontSize="3.0" fontWeight="900" textAnchor="middle">6</text>
+        <text y="51.2" x="76.4" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">5</text>
+        <text y="51.2" x="81.2" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">4</text>
+        <text y="51.2" x="86" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">3</text>
+        <text y="51.2" x="90.8" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">2</text>
+        <text y="51.2" x="95.6" fill="#0f172a" fontSize="3.0" fontWeight="900" textAnchor="middle">1</text>
+
 
         {/* Lingkaran Grouping Balistik (bila ada) */}
         {ballistics.grouping && (
-          <circle
-            cx={50 + ((ballistics.offsetX || 0) / 400) * 50}
-            cy={50 + ((ballistics.offsetY || 0) / 400) * 50}
-            r={Math.min(
-              45,
-              Math.max(5, ((ballistics.grouping || 20) / 400) * 50)
-            )}
-            fill="rgba(6, 182, 212, 0.08)"
-            stroke="#06b6d4"
-            strokeWidth="0.6"
-            strokeDasharray="2,1.5"
-          />
+          <g>
+            <circle
+              cx={50 + ((ballistics.offsetX || 0) / 400) * 50}
+              cy={50 + ((ballistics.offsetY || 0) / 400) * 50}
+              r={Math.min(
+                45,
+                Math.max(5, ((ballistics.grouping || 20) / 400) * 50)
+              )}
+              fill="rgba(56, 189, 248, 0.12)"
+              stroke="#38bdf8"
+              strokeWidth="0.75"
+              strokeDasharray="2.5,1.5"
+            />
+            {/* Titik MPI Center */}
+            <circle
+              cx={50 + ((ballistics.offsetX || 0) / 400) * 50}
+              cy={50 + ((ballistics.offsetY || 0) / 400) * 50}
+              r="1.2"
+              fill="#fbbf24"
+              stroke="#0f172a"
+              strokeWidth="0.4"
+            />
+          </g>
         )}
 
         {/* Titik Perolehan Tembakan (Hits) */}
@@ -737,12 +787,13 @@ export const LiveScoring = () => {
             x="50"
             y="51.5"
             fill="#ffffff"
-            fontSize="3.2"
-            fontWeight="600"
+            fontSize="3.5"
+            fontWeight="700"
             textAnchor="middle"
-            opacity="0.85"
+            opacity="0.9"
+            style={{ letterSpacing: "0.5px" }}
           >
-            Menunggu Tembakan
+            Menunggu Tembakan...
           </text>
         ) : (
           hits.map((h, i) => {
@@ -751,10 +802,10 @@ export const LiveScoring = () => {
               h.ring === "10" ||
               String(h.ring).toLowerCase().includes("bull");
             const isHighlighted = highlightedHitNomor === (h.nomor || i + 1);
-            const hitRadius = isHighlighted ? 3.8 : 2.7;
+            const hitRadius = isHighlighted ? 3 : 2.2;
 
-            let hitColor = "#ffc107";
-            if (isBull) hitColor = "#ff3838";
+            let hitColor = "#eab308";
+            if (isBull) hitColor = "#ef4444";
             else if (h.poin >= 9) hitColor = "#10b981";
             else if (h.poin >= 8) hitColor = "#06b6d4";
 
@@ -778,10 +829,10 @@ export const LiveScoring = () => {
                   <circle
                     cx={h.x}
                     cy={h.y}
-                    r={hitRadius + 2.5}
-                    fill="rgba(0, 242, 254, 0.25)"
+                    r={hitRadius + 2.0}
+                    fill="rgba(0, 242, 254, 0.3)"
                     stroke="#00f2fe"
-                    strokeWidth="0.8"
+                    strokeWidth="1.0"
                     filter="url(#shotGlow)"
                   />
                 )}
@@ -791,26 +842,30 @@ export const LiveScoring = () => {
                   cy={h.y}
                   r={hitRadius}
                   fill={hitColor}
-                  stroke={isHighlighted ? "#ffffff" : "#000000"}
-                  strokeWidth={isHighlighted ? 0.9 : 0.6}
+                  stroke={isHighlighted ? "#ffffff" : "#0f172a"}
+                  strokeWidth={isHighlighted ? 0.75 : 0.5}
                   filter={isBull ? "url(#bullGlow)" : undefined}
                 />
 
                 <circle
                   cx={h.x}
                   cy={h.y}
-                  r={0.8}
-                  fill={isBull ? "#ffffff" : "#dc3545"}
+                  r={0.7}
+                  fill={isBull ? "#ffffff" : "#991b1b"}
                 />
 
                 <text
                   x={h.x}
-                  y={h.y + 0.9}
-                  fill={isBull ? "#ffffff" : "#000000"}
-                  fontSize={isHighlighted ? "2.6" : "2.2"}
-                  fontWeight="bold"
+                  y={h.y}
+                  fill="#ffffff"
+                  fontSize={isHighlighted ? "3.2" : "0"}
+                  fontWeight="900"
                   textAnchor="middle"
                   pointerEvents="none"
+                  style={{
+                    filter: "drop-shadow(0 1px 2px rgba(0,0,0,1))",
+                    fontFamily: "monospace",
+                  }}
                 >
                   {h.nomor || i + 1}
                 </text>
@@ -822,7 +877,7 @@ export const LiveScoring = () => {
     );
   };
 
-  // Helper render foto anotasi kamera untuk Mode Individual
+  // Helper render foto anotasi kamera untuk Mode Individual (Disesuaikan untuk Monitor Atas Jalur)
   const renderPhotoTarget = (shooter) => {
     if (!shooter) return null;
     const fotoUrl = shooter.currentBabakFoto
@@ -832,10 +887,10 @@ export const LiveScoring = () => {
     if (!fotoUrl) {
       return (
         <div className="text-center py-5 text-secondary">
-          <i className="bi bi-camera-video-off fs-1 d-block mb-2 text-secondary opacity-50"></i>
-          <p className="small mb-1 text-light">Belum ada foto deteksi kamera</p>
-          <span className="small text-secondary" style={{ fontSize: "0.72rem" }}>
-            Foto anotasi AI akan muncul saat sasaran diproses
+          <i className="bi bi-camera-video-off fs-1 d-block mb-3 text-secondary opacity-50"></i>
+          <p className="fs-6 mb-1 text-light fw-bold">Belum Ada Foto Deteksi Kamera</p>
+          <span className="small text-white-50" style={{ fontSize: "0.85rem" }}>
+            Foto anotasi AI akan otomatis muncul saat sasaran diunggah atau terdeteksi
           </span>
         </div>
       );
@@ -846,24 +901,24 @@ export const LiveScoring = () => {
         <img
           src={fotoUrl}
           alt={`Foto Kamera Lane ${shooter.lane}`}
-          className="img-fluid rounded-3 shadow w-100 h-auto"
-          style={{ maxHeight: "380px", objectFit: "contain" }}
+          className="img-fluid rounded-4 shadow-lg w-100 h-auto border border-secondary border-opacity-50"
+          style={{ maxHeight: "560px", minHeight: "430px", objectFit: "contain" }}
         />
         <a
           href={fotoUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn btn-sm btn-dark position-absolute bottom-0 end-0 m-2 py-1 px-2 border border-secondary shadow opacity-90"
-          style={{ fontSize: "0.72rem" }}
+          className="btn btn-sm btn-dark position-absolute bottom-0 end-0 m-3 py-1 px-3 border border-secondary shadow-lg opacity-90 fw-bold"
+          style={{ fontSize: "0.82rem" }}
           title="Buka foto resolusi penuh di tab baru"
         >
-          <i className="bi bi-arrows-angle-expand me-1 text-info"></i> Perbesar
+          <i className="bi bi-arrows-angle-expand me-1 text-info"></i> Perbesar Foto
         </a>
       </div>
     );
   };
 
-  // Helper render catatan analisis taktis untuk Mode Individual
+  // Helper render catatan analisis taktis untuk Mode Individual (Disesuaikan untuk Monitor Atas Jalur)
   const renderIndividualAnalysis = (shooter) => {
     const rawCatatan =
       shooter?.currentBabakCatatan || shooter?.currentBabakBallistics?.catatan;
@@ -874,50 +929,49 @@ export const LiveScoring = () => {
 
     return (
       <div
-        className="card border-0 shadow-lg rounded-4 overflow-hidden"
+        className="card border-0 shadow-lg rounded-4 overflow-hidden h-100"
         style={{
-          backgroundColor: "rgba(15, 23, 42, 0.9)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          backgroundColor: "rgba(15, 23, 42, 0.95)",
+          border: "1px solid rgba(14, 165, 233, 0.25)",
         }}
       >
         <div
-          className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
-          style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+          className="card-header py-2 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+          style={{ backgroundColor: "rgba(10, 15, 29, 0.95)" }}
         >
           <span
-            className="fw-semibold text-info d-flex align-items-center gap-1.5"
-            style={{ fontSize: "0.82rem" }}
+            className="fw-bold text-info d-flex align-items-center gap-2"
+            style={{ fontSize: "0.92rem", letterSpacing: "0.4px" }}
           >
-            <i className="bi bi-chat-left-text-fill text-info"></i>
-            Catatan Analisis & Rekomendasi Taktis Pelatih:
+            <i className="bi bi-chat-left-text-fill text-info fs-5"></i>
+            Catatan Analisis & Rekomendasi Taktis:
           </span>
           {shooter?.currentBabakBallistics?.status && (
             <span
-              className="badge bg-primary text-white"
-              style={{ fontSize: "0.68rem" }}
+              className="badge bg-primary text-white px-2 py-1 fw-bold text-uppercase"
+              style={{ fontSize: "0.75rem", letterSpacing: "0.5px" }}
             >
               {shooter.currentBabakBallistics.status}
             </span>
           )}
         </div>
-        <div className="card-body p-3">
+        <div className="card-body p-3 d-flex flex-column justify-content-start">
           {hasCatatan ? (
             <div>
               {parsed.warning && (
                 <div
-                  className="alert alert-warning py-2 px-3 mb-2.5 border border-warning border-opacity-50 text-warning-emphasis d-flex align-items-start gap-2 rounded-3"
+                  className="alert alert-warning py-2 px-3 mb-3 border border-warning border-opacity-50 text-warning-emphasis d-flex align-items-start gap-2 rounded-3"
                   style={{
-                    fontSize: "0.78rem",
-                    backgroundColor: "rgba(234, 179, 8, 0.12)",
-                    lineHeight: 1.4,
+                    fontSize: "0.92rem",
+                    backgroundColor: "rgba(234, 179, 8, 0.15)",
+                    lineHeight: 1.5,
                   }}
                 >
                   <i
-                    className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
-                    style={{ fontSize: "0.9rem", marginTop: "2px" }}
+                    className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0 fs-5 mt-0"
                   ></i>
                   <div>
-                    <strong className="text-warning">Koreksi Kuota:</strong>{" "}
+                    <strong className="text-warning fw-bold">Peringatan Kuota Peluru:</strong>{" "}
                     {parsed.warning.replace(
                       /^Peringatan Kuota Peluru:\s*/i,
                       ""
@@ -928,19 +982,23 @@ export const LiveScoring = () => {
 
               {parsed.items.length > 1 ? (
                 <ul
-                  className="mb-0 ps-3 text-white-50"
-                  style={{ fontSize: "0.8rem", lineHeight: 1.55 }}
+                  className="mb-0 ps-0 list-unstyled d-flex flex-column gap-2"
                 >
                   {parsed.items.map((item, idx) => (
-                    <li key={idx} className="mb-1.5 text-light">
-                      {item}
+                    <li
+                      key={idx}
+                      className="d-flex align-items-start gap-2 text-white"
+                      style={{ fontSize: "0.96rem", lineHeight: 1.6 }}
+                    >
+                      <i className="bi bi-chevron-right text-info fw-bold flex-shrink-0 mt-1"></i>
+                      <span>{item}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p
-                  className="mb-0 text-light"
-                  style={{ fontSize: "0.8rem", lineHeight: 1.55 }}
+                  className="mb-0 text-white"
+                  style={{ fontSize: "0.96rem", lineHeight: 1.6 }}
                 >
                   {parsed.items[0] || rawCatatan}
                 </p>
@@ -948,10 +1006,10 @@ export const LiveScoring = () => {
             </div>
           ) : (
             <div
-              className="text-secondary small fst-italic py-2 text-center"
-              style={{ fontSize: "0.78rem" }}
+              className="text-white-50 py-3 text-center"
+              style={{ fontSize: "0.9rem" }}
             >
-              <i className="bi bi-info-circle me-1"></i> Belum ada catatan analisis tembakan untuk babak ini. Catatan akan otomatis diperbarui saat sistem SITRAK-Detect menganalisis sasaran.
+              <i className="bi bi-info-circle me-1 text-info"></i> Belum ada catatan analisis tembakan untuk babak ini. Catatan akan otomatis diperbarui saat sistem SITRAK menganalisis sasaran.
             </div>
           )}
         </div>
@@ -959,135 +1017,329 @@ export const LiveScoring = () => {
     );
   };
 
-  // Helper render tabel rincian shot-by-shot untuk Mode Individual
+  // Helper render tabel rincian perkenaan tembakan untuk Mode Individual (Disesuaikan untuk Monitor Atas Jalur)
   const renderShotByShotTable = (shooter) => {
     const hits = shooter?.currentBabakHits || [];
 
     if (hits.length === 0) {
       return (
-        <div className="text-center py-4 text-secondary small fst-italic">
+        <div className="text-center py-5 text-white-50 fs-6 fst-italic">
+          <i className="bi bi-inbox fs-2 d-block mb-2 text-secondary opacity-50"></i>
           Belum ada data butir tembakan pada babak ini
         </div>
       );
     }
 
-    return (
-      <div className="table-responsive" style={{ maxHeight: "250px" }}>
-        <table
-          className="table table-dark table-hover table-sm mb-0 align-middle"
-          style={{ fontSize: "0.78rem" }}
-        >
-          <thead
-            className="table-secondary text-dark sticky-top"
-            style={{ fontSize: "0.72rem" }}
-          >
-            <tr>
-              <th className="text-center" style={{ width: "45px" }}>
-                #
-              </th>
-              <th className="text-center" style={{ width: "65px" }}>
-                Skor
-              </th>
-              <th className="text-center">Zona Ring</th>
-              <th className="text-center">Jarak Pusat</th>
-              <th className="text-center">Koordinat</th>
-              <th className="text-center" style={{ width: "65px" }}>
-                Sorot
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {hits.map((h, hIdx) => {
-              const isBull =
-                h.poin === 10 ||
-                h.ring === "10" ||
-                String(h.ring).toLowerCase().includes("bull");
-              const isSelected = highlightedHitNomor === (h.nomor || hIdx + 1);
+    // Hitung agregasi distribusi perkenaan per poin
+    const pointMap = {};
+    let totalScore = 0;
 
-              return (
-                <tr
-                  key={hIdx}
-                  style={{
-                    cursor: "pointer",
-                    backgroundColor: isSelected
-                      ? "rgba(6, 182, 212, 0.22)"
-                      : undefined,
-                  }}
-                  onMouseEnter={() =>
-                    setHighlightedHitNomor(h.nomor || hIdx + 1)
-                  }
-                  onMouseLeave={() => setHighlightedHitNomor(null)}
-                  onClick={() =>
-                    setHighlightedHitNomor(
-                      isSelected ? null : h.nomor || hIdx + 1
-                    )
-                  }
-                >
-                  <td className="text-center font-monospace fw-bold">
-                    #{h.nomor || hIdx + 1}
-                  </td>
-                  <td className="text-center">
-                    <span
-                      className={`badge font-monospace ${
-                        isBull
-                          ? "bg-danger text-white border border-danger"
-                          : h.poin >= 9
-                          ? "bg-success text-white"
-                          : h.poin >= 8
-                          ? "bg-info text-dark fw-bold"
-                          : "bg-warning text-dark fw-bold"
-                      }`}
-                    >
-                      {h.poin}
-                    </span>
-                  </td>
-                  <td className="text-center">
-                    <span className="badge bg-dark border border-secondary text-light">
-                      {h.ring || "-"}
-                    </span>
-                  </td>
-                  <td className="text-center font-monospace">
-                    {h.jarak_pusat_mm !== null &&
-                    h.jarak_pusat_mm !== undefined
-                      ? `${h.jarak_pusat_mm} mm`
-                      : "-"}
-                  </td>
-                  <td
-                    className="text-center font-monospace text-secondary"
-                    style={{ fontSize: "0.72rem" }}
+    hits.forEach((h, hIdx) => {
+      const p = h.poin !== undefined && h.poin !== null ? Math.round(Number(h.poin)) : 0;
+      totalScore += p;
+      if (!pointMap[p]) {
+        pointMap[p] = {
+          poin: p,
+          count: 0,
+          totalSubtotal: 0,
+          shots: [],
+          ringLabel: h.ring || (p === 10 ? "10 / X" : String(p)),
+        };
+      }
+      pointMap[p].count += 1;
+      pointMap[p].totalSubtotal += p;
+      pointMap[p].shots.push({
+        nomor: h.nomor || hIdx + 1,
+        poin: p,
+        ring: h.ring,
+        jarak_pusat_mm: h.jarak_pusat_mm,
+        rawHit: h,
+      });
+    });
+
+    // Urutkan poin dari tertinggi (10) ke terendah (0)
+    const sortedPoints = Object.values(pointMap).sort((a, b) => b.poin - a.poin);
+    const totalHits = hits.length;
+    const avgScore = totalHits > 0 ? (totalScore / totalHits).toFixed(1) : "0.0";
+
+    // Mode Detail Koordinat Butir per Butir
+    if (shotTableViewMode === "detail") {
+      return (
+        <div className="table-responsive">
+          <table
+            className="table table-dark table-hover mb-0 align-middle"
+            style={{ fontSize: "0.88rem" }}
+          >
+            <thead
+              className="table-dark text-white border-bottom border-secondary"
+              style={{ fontSize: "0.78rem", letterSpacing: "0.6px" }}
+            >
+              <tr>
+                <th className="text-center py-2 text-uppercase" style={{ width: "45px" }}>
+                  #
+                </th>
+                <th className="text-center py-2 text-uppercase" style={{ width: "65px" }}>
+                  Skor
+                </th>
+                <th className="text-center py-2 text-uppercase">Zona</th>
+                <th className="text-center py-2 text-uppercase">Jarak</th>
+                <th className="text-center py-2 text-uppercase">Koordinat</th>
+                <th className="text-center py-2 text-uppercase" style={{ width: "55px" }}>
+                  Sorot
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {hits.map((h, hIdx) => {
+                const isBull =
+                  h.poin === 10 ||
+                  h.ring === "10" ||
+                  String(h.ring).toLowerCase().includes("bull");
+                const isSelected = highlightedHitNomor === (h.nomor || hIdx + 1);
+
+                return (
+                  <tr
+                    key={hIdx}
+                    style={{
+                      cursor: "pointer",
+                      backgroundColor: isSelected
+                        ? "rgba(6, 182, 212, 0.28)"
+                        : undefined,
+                    }}
+                    onMouseEnter={() =>
+                      setHighlightedHitNomor(h.nomor || hIdx + 1)
+                    }
+                    onMouseLeave={() => setHighlightedHitNomor(null)}
+                    onClick={() =>
+                      setHighlightedHitNomor(
+                        isSelected ? null : h.nomor || hIdx + 1
+                      )
+                    }
                   >
-                    ({(h.rawX ?? h.x).toFixed(1)}, {(h.rawY ?? h.y).toFixed(1)})
-                  </td>
-                  <td className="text-center">
-                    <button
-                      type="button"
-                      className={`btn btn-sm py-0 px-1.5 ${
-                        isSelected
-                          ? "btn-info text-dark"
-                          : "btn-outline-secondary text-secondary"
-                      }`}
-                      style={{ fontSize: "0.68rem" }}
-                      title="Sorot tembakan pada lesan"
+                    <td className="text-center font-monospace fw-bold fs-6 text-warning">
+                      #{h.nomor || hIdx + 1}
+                    </td>
+                    <td className="text-center">
+                      <span
+                        className={`badge font-monospace fs-6 px-2 py-0 ${isBull
+                          ? "bg-danger text-white border border-danger shadow-sm fw-black"
+                          : h.poin >= 9
+                            ? "bg-success text-white shadow-sm fw-bold"
+                            : h.poin >= 8
+                              ? "bg-info text-dark fw-bold shadow-sm"
+                              : "bg-warning text-dark fw-bold shadow-sm"
+                          }`}
+                      >
+                        {h.poin}
+                      </span>
+                    </td>
+                    <td className="text-center">
+                      <span className="badge bg-black border border-secondary text-white font-monospace fs-6 px-2 py-0">
+                        {h.ring || "-"}
+                      </span>
+                    </td>
+                    <td className="text-center font-monospace fw-bold text-white fs-6">
+                      {h.jarak_pusat_mm !== null &&
+                        h.jarak_pusat_mm !== undefined
+                        ? `${h.jarak_pusat_mm}mm`
+                        : "-"}
+                    </td>
+                    <td
+                      className="text-center font-monospace text-light opacity-90"
+                      style={{ fontSize: "0.8rem" }}
                     >
-                      <i className="bi bi-eye"></i>
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      ({(h.rawX ?? h.x).toFixed(1)}, {(h.rawY ?? h.y).toFixed(1)})
+                    </td>
+                    <td className="text-center">
+                      <button
+                        type="button"
+                        className={`btn btn-sm py-0 px-1 ${isSelected
+                          ? "btn-info text-dark fw-bold"
+                          : "btn-outline-secondary text-light"
+                          }`}
+                        style={{ fontSize: "0.75rem" }}
+                        title="Sorot tembakan pada lesan"
+                      >
+                        <i className="bi bi-eye"></i>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    // Default Mode: Distribusi Rincian Perkenaan Tembakan (Poin 10 : X butir, Poin 9 : Y butir, dst)
+    return (
+      <div className="d-flex flex-column h-100">
+        {/* Tabel Distribusi Rincian Poin - Tidak Scrollable */}
+        <div className="table-responsive">
+          <table
+            className="table table-dark table-hover mb-0 align-middle"
+            style={{ fontSize: "0.9rem" }}
+          >
+            <thead
+              className="table-dark text-white border-bottom border-secondary"
+              style={{
+                fontSize: "0.78rem",
+                letterSpacing: "0.6px",
+                backgroundColor: "rgba(15, 23, 42, 0.98)",
+              }}
+            >
+              <tr>
+                <th className="py-2 px-2 text-uppercase" style={{ width: "90px" }}>
+                  Poin
+                </th>
+                <th className="text-center py-2 text-uppercase" style={{ width: "105px" }}>
+                  Jml
+                </th>
+                <th className="text-center py-2 text-uppercase" style={{ width: "80px" }}>
+                  Subtotal
+                </th>
+                <th className="py-2 px-2 text-uppercase" style={{ minWidth: "110px" }}>
+                  Nomor Butir
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedPoints.map((item) => {
+                const percentage = totalHits > 0 ? ((item.count / totalHits) * 100).toFixed(0) : 0;
+                const isTen = item.poin === 10;
+                const isNine = item.poin === 9;
+                const isEight = item.poin === 8;
+
+                const badgeBg = isTen
+                  ? "bg-danger text-white border border-danger shadow-sm"
+                  : isNine
+                    ? "bg-success text-white"
+                    : isEight
+                      ? "bg-info text-dark"
+                      : item.poin >= 7
+                        ? "bg-warning text-dark"
+                        : "bg-secondary text-white";
+
+                const progressBarColor = isTen
+                  ? "bg-danger"
+                  : isNine
+                    ? "bg-success"
+                    : isEight
+                      ? "bg-info"
+                      : item.poin >= 7
+                        ? "bg-warning"
+                        : "bg-secondary";
+
+                return (
+                  <tr
+                    key={item.poin}
+                    className="border-bottom border-secondary border-opacity-20"
+                  >
+                    {/* Kolom Poin / Ring */}
+                    <td className="px-2">
+                      <div className="d-flex align-items-center gap-1">
+                        <span
+                          className={`badge font-monospace px-2 py-1 fw-black fs-6 ${badgeBg}`}
+                          style={{ minWidth: "32px", textAlign: "center" }}
+                        >
+                          {item.poin}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Kolom Jumlah Perkenaan (Besar & Jelas untuk Monitor Layar Jalur) */}
+                    <td className="text-center">
+                      <div className="d-inline-flex align-items-baseline gap-1 bg-black bg-opacity-40 px-2 py-0 rounded-2 border border-secondary border-opacity-30">
+                        <span className="fw-black text-warning font-monospace fs-5">
+                          {item.count}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Kolom Subtotal Poin */}
+                    <td className="text-center">
+                      <span className="fw-bold font-monospace text-info fs-6">
+                        +{item.totalSubtotal}
+                      </span>
+                    </td>
+
+                    {/* Kolom Nomor Butir Peluru (Interaktif) */}
+                    <td className="px-2">
+                      <div className="d-flex flex-wrap gap-1">
+                        {item.shots.map((s) => {
+                          const isHighlighted = highlightedHitNomor === s.nomor;
+                          return (
+                            <button
+                              key={s.nomor}
+                              type="button"
+                              className={`btn btn-sm py-0 px-1 font-monospace fw-bold rounded-pill transition-all ${isHighlighted
+                                ? "btn-info text-dark shadow border border-white"
+                                : "btn-outline-secondary text-light border-opacity-50"
+                                }`}
+                              style={{
+                                fontSize: "0.78rem",
+                                transform: isHighlighted ? "scale(1.12)" : "scale(1)",
+                                zIndex: isHighlighted ? 2 : 1,
+                              }}
+                              title={`Tembakan #${s.nomor} (Ring ${s.ring || s.poin}, Jarak: ${s.jarak_pusat_mm ?? "-"
+                                }mm) - Klik untuk sorot pada lesan`}
+                              onMouseEnter={() => setHighlightedHitNomor(s.nomor)}
+                              onMouseLeave={() => setHighlightedHitNomor(null)}
+                              onClick={() =>
+                                setHighlightedHitNomor(isHighlighted ? null : s.nomor)
+                              }
+                            >
+                              #{s.nomor}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {/* Footer Total Rekap Babak */}
+            <tfoot
+              className="border-top-2 border-secondary"
+              style={{
+                backgroundColor: "rgba(10, 15, 29, 0.98)",
+              }}
+            >
+              <tr className="fw-bold">
+                <td className="px-2 text-uppercase text-secondary small" style={{ fontSize: "0.78rem" }}>
+                  TOTAL
+                </td>
+                <td className="text-center">
+                  <span className="fw-black text-white font-monospace fs-6">
+                    {totalHits}
+                  </span>
+                  <span className="text-white-50 small ms-1" style={{ fontSize: "0.75rem" }}>btr</span>
+                </td>
+                <td className="text-white-50 small" style={{ fontSize: "0.78rem" }}>
+                  Avg: <span className="text-warning fw-bold font-monospace">{avgScore}</span>
+                </td>
+                <td className="text-center">
+                  <span className="fw-black text-warning font-monospace fs-6">
+                    {totalScore}
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
     );
   };
 
-  // Helper render tabel rekap seluruh babak untuk penembak aktif
+  // Helper render tabel rekap seluruh babak untuk penembak aktif (Disesuaikan untuk Monitor Atas Jalur)
   const renderMultiRoundTable = (shooter) => {
     const babakScores = shooter?.babak_scores || [];
 
     if (babakScores.length === 0) {
       return (
-        <div className="text-center py-3 text-secondary small fst-italic">
+        <div className="text-center py-4 text-white-50 fs-6 fst-italic">
           Belum ada riwayat babak
         </div>
       );
@@ -1096,19 +1348,19 @@ export const LiveScoring = () => {
     return (
       <div className="table-responsive">
         <table
-          className="table table-dark table-hover table-sm mb-0 align-middle"
-          style={{ fontSize: "0.78rem" }}
+          className="table table-dark table-hover mb-0 align-middle"
+          style={{ fontSize: "0.92rem" }}
         >
           <thead
-            className="table-secondary text-dark"
-            style={{ fontSize: "0.72rem" }}
+            className="table-dark text-white border-bottom border-secondary"
+            style={{ fontSize: "0.82rem", letterSpacing: "0.8px" }}
           >
             <tr>
-              <th>Babak Latihan</th>
-              <th className="text-center">Peluru</th>
-              <th className="text-center">Skor</th>
-              <th className="text-center">Akurasi</th>
-              <th className="text-center">Aksi</th>
+              <th className="py-2 text-uppercase">Babak Latihan</th>
+              <th className="text-center py-2 text-uppercase">Peluru</th>
+              <th className="text-center py-2 text-uppercase">Skor</th>
+              <th className="text-center py-2 text-uppercase">Akurasi</th>
+              <th className="text-center py-2 text-uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -1122,42 +1374,41 @@ export const LiveScoring = () => {
                   key={bIdx}
                   style={{
                     backgroundColor: isCurrentBabak
-                      ? "rgba(59, 130, 246, 0.15)"
+                      ? "rgba(59, 130, 246, 0.22)"
                       : undefined,
                   }}
                 >
-                  <td className="fw-semibold">
+                  <td className="fw-bold text-white fs-6">
                     Babak {bs.nomor}: {bs.nama}
                     {isCurrentBabak && (
                       <span
-                        className="badge bg-primary ms-1.5"
-                        style={{ fontSize: "0.62rem" }}
+                        className="badge bg-primary text-white ms-2 px-2 py-0 fw-bold"
+                        style={{ fontSize: "0.72rem" }}
                       >
                         Aktif
                       </span>
                     )}
                   </td>
-                  <td className="text-center font-monospace">
+                  <td className="text-center font-monospace fw-semibold text-light fs-6">
                     {bs.hits?.length || 0} / {bs.peluru || 10}
                   </td>
-                  <td className="text-center font-monospace fw-bold text-white">
+                  <td className="text-center font-monospace fw-bold text-white fs-6">
                     {bs.skor}{" "}
-                    <span className="text-secondary fw-normal">
+                    <span className="text-white-50 fw-normal">
                       /{bs.max_skor}
                     </span>
                   </td>
-                  <td className="text-center font-monospace text-success">
+                  <td className="text-center font-monospace fw-bold text-success fs-6">
                     {bs.akurasi}%
                   </td>
                   <td className="text-center">
                     <button
                       type="button"
-                      className={`btn btn-sm py-0 px-2 ${
-                        isCurrentBabak
-                          ? "btn-primary disabled"
-                          : "btn-outline-primary"
-                      }`}
-                      style={{ fontSize: "0.7rem" }}
+                      className={`btn btn-sm py-1 px-3 fw-bold ${isCurrentBabak
+                        ? "btn-primary disabled shadow-sm"
+                        : "btn-outline-primary"
+                        }`}
+                      style={{ fontSize: "0.78rem" }}
                       onClick={() => {
                         if (bs.id_babak || bs.nomor) {
                           setActiveBabakId(String(bs.id_babak || bs.nomor));
@@ -1239,10 +1490,10 @@ export const LiveScoring = () => {
 
           <i
             className={`bi ${isSelesai
-                ? "bi-flag-fill text-primary"
-                : isDibatalkan
-                  ? "bi-slash-circle text-danger"
-                  : "bi-exclamation-triangle text-warning"
+              ? "bi-flag-fill text-primary"
+              : isDibatalkan
+                ? "bi-slash-circle text-danger"
+                : "bi-exclamation-triangle text-warning"
               } display-3 mb-3`}
           ></i>
 
@@ -1256,11 +1507,11 @@ export const LiveScoring = () => {
 
           {sesi && (
             <div className="p-3 bg-black bg-opacity-40 rounded-3 mb-4 text-start small border border-secondary border-opacity-25">
-              <div className="d-flex justify-content-between mb-1.5">
+              <div className="d-flex justify-content-between mb-1">
                 <span className="text-secondary">Nama Sesi:</span>
                 <strong className="text-white">{sesi.nama_sesi}</strong>
               </div>
-              <div className="d-flex justify-content-between mb-1.5">
+              <div className="d-flex justify-content-between mb-1">
                 <span className="text-secondary">Kode Sesi:</span>
                 <span className="text-white font-monospace">{sesi.kode_sesi}</span>
               </div>
@@ -1305,213 +1556,210 @@ export const LiveScoring = () => {
         color: "#f1f5f9",
       }}
     >
-      {/* 1. TOP COMMAND BAR / HEADER */}
-      <header
-        className="border-bottom border-secondary border-opacity-25 py-2 px-3 px-md-4 shadow"
-        style={{ backgroundColor: "rgba(15, 23, 42, 0.95)" }}
-      >
-        <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-2">
-          {/* Sisi Kiri: Back, Live Indicator, Identitas Sesi */}
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-light border-secondary d-flex align-items-center gap-1"
-              onClick={() => navigate("/detail-sesi")}
-              title="Kembali ke halaman Detail Sesi"
-            >
-              <i className="bi bi-arrow-left"></i>
-              <span className="d-none d-sm-inline">Kembali</span>
-            </button>
-
-            {/* LIVE INDICATOR GLOW */}
-            <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-danger bg-opacity-25 border border-danger shadow-sm">
-              <span
-                className="spinner-grow spinner-grow-sm text-danger"
-                role="status"
-                style={{ width: "0.65rem", height: "0.65rem" }}
-              />
-              <span
-                className="fw-bold text-danger tracking-wider small"
-                style={{ letterSpacing: "1.5px" }}
-              >
-                LIVE SCORING
-              </span>
-            </div>
-
-            <div>
-              <h5 className="fw-bold mb-0 text-white d-flex align-items-center gap-2 flex-wrap fs-6 fs-md-5">
-                <span>{sesi.nama_sesi}</span>
-                <span className="badge bg-secondary bg-opacity-50 text-white font-monospace small">
-                  {sesi.kode_sesi}
-                </span>
-                <span className="badge bg-success-subtle text-success border border-success small">
-                  {sesi.status || "Berlangsung"}
-                </span>
-              </h5>
-              <div
-                className="text-secondary small d-flex align-items-center gap-2 flex-wrap"
-                style={{ fontSize: "0.78rem" }}
-              >
-                <span>
-                  <i className="bi bi-geo-alt me-1 text-danger"></i>
-                  {sesi.nama_tempat_menembak}
-                </span>
-                <span>•</span>
-                <span>
-                  <i className="bi bi-crosshair me-1 text-primary"></i>
-                  {sesi.model_senjata} ({sesi.kaliber})
-                </span>
-                <span>•</span>
-                <span>
-                  <i className="bi bi-arrows-expand me-1 text-warning"></i>
-                  {sesi.jarak_meter} Meter
-                </span>
-                <span>•</span>
-                <span>
-                  <i className="bi bi-bullseye me-1 text-info"></i>
-                  Target: {sesi.nama_tipe_target}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Sisi Kanan: Kontrol Refresh & Tombol Fullscreen */}
-          <div className="d-flex align-items-center gap-2 ms-auto flex-wrap">
-            {/* Auto-refresh timer button */}
-            <button
-              type="button"
-              className={`btn btn-sm d-flex align-items-center gap-1 ${autoRefresh
-                  ? "btn-outline-success text-success bg-success bg-opacity-10"
-                  : "btn-outline-secondary"
-                }`}
-              onClick={() => setAutoRefresh(!autoRefresh)}
-              title={
-                autoRefresh
-                  ? "Auto-refresh aktif setiap 5 detik"
-                  : "Auto-refresh dimatikan"
-              }
-            >
-              <i
-                className={`bi bi-arrow-repeat ${autoRefresh ? "text-success" : ""
-                  }`}
-              />
-              <span className="small">
-                {autoRefresh ? `Auto: ${refreshCountdown}s` : "Manual"}
-              </span>
-            </button>
-
-            {/* Tombol Refresh Manual */}
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-light border-secondary"
-              onClick={() => {
-                fetchSesiData(false);
-                setRefreshCountdown(5);
-              }}
-              title="Perbarui Data Sekarang"
-            >
-              <i className="bi bi-arrow-clockwise"></i>
-            </button>
-
-            {/* Quick Switch Sesi Dropdown */}
-            {allSesiList.length > 1 && (
-              <div className="dropdown">
-                <button
-                  className="btn btn-sm btn-outline-secondary dropdown-toggle text-light"
-                  type="button"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
-                  title="Ganti Sesi Latihan"
-                >
-                  <i className="bi bi-collection-play me-1"></i>
-                  <span className="d-none d-md-inline">Ganti Sesi</span>
-                </button>
-                <ul
-                  className="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow"
-                  style={{ maxHeight: "250px", overflowY: "auto" }}
-                >
-                  <li>
-                    <h6 className="dropdown-header text-uppercase text-secondary small">
-                      Pilih Sesi Latihan
-                    </h6>
-                  </li>
-                  {allSesiList.map((s) => (
-                    <li key={s.id_sesi}>
-                      <button
-                        type="button"
-                        className={`dropdown-item small d-flex justify-content-between align-items-center ${String(s.id_sesi) === String(currentId)
-                            ? "active fw-bold"
-                            : ""
-                          }`}
-                        onClick={() => {
-                          const newId = String(s.id_sesi);
-                          localStorage.setItem("active_sesi_id", newId);
-                          localStorage.setItem(
-                            "active_sesi_kode",
-                            s.kode_sesi || `SESI-${newId}`
-                          );
-                          setActiveSesiId(newId);
-                          setActiveGelombang(1);
-                          setActiveBabakId(null);
-                        }}
-                      >
-                        <span>{s.nama_sesi}</span>
-                        <span className="badge bg-secondary ms-2 small">
-                          {s.status}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* TOMBOL TOGGLE HIDE/SHOW TOOLBAR */}
-            <button
-              type="button"
-              className={`btn btn-sm d-flex align-items-center gap-1.5 shadow-sm px-2.5 ${
-                showToolbar
-                  ? "btn-outline-secondary text-light bg-dark"
-                  : "btn-info text-dark fw-bold"
-              }`}
-              onClick={() => setShowToolbar(!showToolbar)}
-              title={
-                showToolbar
-                  ? "Sembunyikan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
-                  : "Tampilkan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
-              }
-            >
-              <i className={`bi ${showToolbar ? "bi-eye-slash" : "bi-eye"}`}></i>
-              <span className="d-none d-sm-inline">
-                {showToolbar ? "Hide Toolbar" : "Show Toolbar"}
-              </span>
-              <i
-                className={`bi ${
-                  showToolbar ? "bi-chevron-up" : "bi-chevron-down"
-                } small ms-0.5`}
-              ></i>
-            </button>
-
-            {/* TOMBOL FULLSCREEN */}
-            <button
-              type="button"
-              className="btn btn-sm btn-warning fw-bold text-dark d-flex align-items-center gap-1 shadow px-3"
-              onClick={toggleFullscreen}
-              title="Beralih ke Layar Penuh (F11)"
-            >
-              <i
-                className={`bi ${isFullscreen ? "bi-fullscreen-exit" : "bi-arrows-fullscreen"
-                  }`}
-              />
-              <span>{isFullscreen ? "Keluar Fullscreen" : "Layar Penuh"}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* 2. SUB-HEADER: GELOMBANG & BABAK CONTROLS, VIEW MODE, & SORT */}
       {showToolbar ? (
         <>
+          {/* 1. TOP COMMAND BAR / HEADER */}
+          <header
+            className="border-bottom border-secondary border-opacity-25 py-2 px-3 px-md-4 shadow"
+            style={{ backgroundColor: "rgba(15, 23, 42, 0.95)" }}
+          >
+            <div className="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-2">
+              {/* Sisi Kiri: Back, Live Indicator, Identitas Sesi */}
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-light border-secondary d-flex align-items-center gap-1"
+                  onClick={() => navigate("/detail-sesi")}
+                  title="Kembali ke halaman Detail Sesi"
+                >
+                  <i className="bi bi-arrow-left"></i>
+                  <span className="d-none d-sm-inline">Kembali</span>
+                </button>
+
+                {/* LIVE INDICATOR GLOW */}
+                <div className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-danger bg-opacity-25 border border-danger shadow-sm">
+                  <span
+                    className="spinner-grow spinner-grow-sm text-danger"
+                    role="status"
+                    style={{ width: "0.65rem", height: "0.65rem" }}
+                  />
+                  <span
+                    className="fw-bold text-danger tracking-wider small"
+                    style={{ letterSpacing: "1.5px" }}
+                  >
+                    LIVE SCORING
+                  </span>
+                </div>
+
+                <div>
+                  <h5 className="fw-bold mb-0 text-white d-flex align-items-center gap-2 flex-wrap fs-6 fs-md-5">
+                    <span>{sesi.nama_sesi}</span>
+                    <span className="badge bg-secondary bg-opacity-50 text-white font-monospace small">
+                      {sesi.kode_sesi}
+                    </span>
+                    <span className="badge bg-success-subtle text-success border border-success small">
+                      {sesi.status || "Berlangsung"}
+                    </span>
+                  </h5>
+                  <div
+                    className="text-light d-flex align-items-center gap-2 flex-wrap mt-0"
+                    style={{ fontSize: "0.88rem" }}
+                  >
+                    <span>
+                      <i className="bi bi-geo-alt-fill me-1 text-danger"></i>
+                      {sesi.nama_tempat_menembak}
+                    </span>
+                    <span className="text-white-50">•</span>
+                    <span>
+                      <i className="bi bi-crosshair me-1 text-primary"></i>
+                      {sesi.model_senjata} ({sesi.kaliber})
+                    </span>
+                    <span className="text-white-50">•</span>
+                    <span>
+                      <i className="bi bi-arrows-expand me-1 text-warning"></i>
+                      {sesi.jarak_meter} Meter
+                    </span>
+                    <span className="text-white-50">•</span>
+                    <span>
+                      <i className="bi bi-bullseye me-1 text-info"></i>
+                      Target: {sesi.nama_tipe_target}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sisi Kanan: Kontrol Refresh & Tombol Fullscreen */}
+              <div className="d-flex align-items-center gap-2 ms-auto flex-wrap">
+                {/* Auto-refresh timer button */}
+                <button
+                  type="button"
+                  className={`btn btn-sm d-flex align-items-center gap-1 ${autoRefresh
+                    ? "btn-outline-success text-success bg-success bg-opacity-10"
+                    : "btn-outline-secondary"
+                    }`}
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  title={
+                    autoRefresh
+                      ? "Auto-refresh aktif setiap 5 detik"
+                      : "Auto-refresh dimatikan"
+                  }
+                >
+                  <i
+                    className={`bi bi-arrow-repeat ${autoRefresh ? "text-success" : ""
+                      }`}
+                  />
+                  <span className="small">
+                    {autoRefresh ? `Auto: ${refreshCountdown}s` : "Manual"}
+                  </span>
+                </button>
+
+                {/* Tombol Refresh Manual */}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-light border-secondary"
+                  onClick={() => {
+                    fetchSesiData(false);
+                    setRefreshCountdown(5);
+                  }}
+                  title="Perbarui Data Sekarang"
+                >
+                  <i className="bi bi-arrow-clockwise"></i>
+                </button>
+
+                {/* Quick Switch Sesi Dropdown */}
+                {allSesiList.length > 1 && (
+                  <div className="dropdown">
+                    <button
+                      className="btn btn-sm btn-outline-secondary dropdown-toggle text-light"
+                      type="button"
+                      data-bs-toggle="dropdown"
+                      aria-expanded="false"
+                      title="Ganti Sesi Latihan"
+                    >
+                      <i className="bi bi-collection-play me-1"></i>
+                      <span className="d-none d-md-inline">Ganti Sesi</span>
+                    </button>
+                    <ul
+                      className="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow"
+                      style={{ maxHeight: "250px", overflowY: "auto" }}
+                    >
+                      <li>
+                        <h6 className="dropdown-header text-uppercase text-secondary small">
+                          Pilih Sesi Latihan
+                        </h6>
+                      </li>
+                      {allSesiList.map((s) => (
+                        <li key={s.id_sesi}>
+                          <button
+                            type="button"
+                            className={`dropdown-item small d-flex justify-content-between align-items-center ${String(s.id_sesi) === String(currentId)
+                              ? "active fw-bold"
+                              : ""
+                              }`}
+                            onClick={() => {
+                              const newId = String(s.id_sesi);
+                              localStorage.setItem("active_sesi_id", newId);
+                              localStorage.setItem(
+                                "active_sesi_kode",
+                                s.kode_sesi || `SESI-${newId}`
+                              );
+                              setActiveSesiId(newId);
+                              setActiveGelombang(1);
+                              setActiveBabakId(null);
+                            }}
+                          >
+                            <span>{s.nama_sesi}</span>
+                            <span className="badge bg-secondary ms-2 small">
+                              {s.status}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* TOMBOL TOGGLE HIDE/SHOW TOOLBAR */}
+                <button
+                  type="button"
+                  className={`btn btn-sm d-flex align-items-center gap-1 shadow-sm px-2 ${showToolbar
+                    ? "btn-outline-secondary text-light bg-dark"
+                    : "btn-info text-dark fw-bold"
+                    }`}
+                  onClick={() => setShowToolbar(!showToolbar)}
+                  title={
+                    showToolbar
+                      ? "Sembunyikan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
+                      : "Tampilkan Toolbar & Kontrol Gelombang (Pintasan: 'H')"
+                  }
+                >
+                  <i className={`bi ${showToolbar ? "bi-eye-slash" : "bi-eye"}`}></i>
+                  <span className="d-none d-sm-inline">
+                    {showToolbar ? "Hide Toolbar" : "Show Toolbar"}
+                  </span>
+                  <i
+                    className={`bi ${showToolbar ? "bi-chevron-up" : "bi-chevron-down"
+                      } small ms-0.5`}
+                  ></i>
+                </button>
+
+                {/* TOMBOL FULLSCREEN */}
+                <button
+                  type="button"
+                  className="btn btn-sm btn-warning fw-bold text-dark d-flex align-items-center gap-1 shadow px-3"
+                  onClick={toggleFullscreen}
+                  title="Beralih ke Layar Penuh (F11)"
+                >
+                  <i
+                    className={`bi ${isFullscreen ? "bi-fullscreen-exit" : "bi-arrows-fullscreen"
+                      }`}
+                  />
+                  <span>{isFullscreen ? "Keluar Fullscreen" : "Layar Penuh"}</span>
+                </button>
+              </div>
+            </div>
+          </header>
+          {/* 2. SUB-HEADER: GELOMBANG & BABAK CONTROLS, VIEW MODE, & SORT */}
           <div
             className="px-3 px-md-4 py-2 border-bottom border-secondary border-opacity-25 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2"
             style={{ backgroundColor: "rgba(15, 23, 42, 0.75)" }}
@@ -1527,14 +1775,14 @@ export const LiveScoring = () => {
                     key={g.id_gelombang || g.nomor_gelombang}
                     type="button"
                     className={`btn ${activeGelombang === g.nomor_gelombang
-                        ? "btn-primary fw-bold text-white shadow-sm"
-                        : "btn-outline-secondary text-light bg-dark"
+                      ? "btn-primary fw-bold text-white shadow-sm"
+                      : "btn-outline-secondary text-light bg-dark"
                       }`}
                     onClick={() => setActiveGelombang(g.nomor_gelombang)}
                   >
-                    Gelombang {g.nomor_gelombang}
+                    Gel {g.nomor_gelombang}
                     <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
-                      {g.penembak?.length || 0} Penembak
+                      {g.penembak?.length || 0} <i class="bi bi-person-fill"></i>
                     </span>
                   </button>
                 ))}
@@ -1544,7 +1792,7 @@ export const LiveScoring = () => {
             {/* Tab Pilihan Babak */}
             <div className="d-flex align-items-center gap-2 flex-wrap">
               <span className="small text-secondary fw-semibold text-uppercase tracking-wider">
-                Babak Latihan:
+                Babak Latihan :
               </span>
               <div className="btn-group btn-group-sm" role="group">
                 {currentBabakList.map((b) => {
@@ -1556,14 +1804,14 @@ export const LiveScoring = () => {
                       key={b.id_babak || b.nomor_babak}
                       type="button"
                       className={`btn ${isSelected
-                          ? "btn-success fw-bold text-white shadow-sm"
-                          : "btn-outline-secondary text-light bg-dark"
+                        ? "btn-success fw-bold text-white shadow-sm"
+                        : "btn-outline-secondary text-light bg-dark"
                         }`}
                       onClick={() =>
                         setActiveBabakId(String(b.id_babak || b.nomor_babak))
                       }
                     >
-                      Babak {b.nomor_babak}: {b.nama_babak}
+                      [{b.nomor_babak}] {b.nama_babak}
                       <span className="badge ms-1 bg-black bg-opacity-50 text-white-50">
                         {b.jumlah_peluru || 10} Butir
                       </span>
@@ -1579,11 +1827,10 @@ export const LiveScoring = () => {
               <div className="btn-group btn-group-sm" role="group">
                 <button
                   type="button"
-                  className={`btn ${
-                    scoringViewMode === "grid"
-                      ? "btn-primary fw-bold text-white shadow-sm"
-                      : "btn-outline-secondary text-light bg-dark"
-                  }`}
+                  className={`btn ${scoringViewMode === "grid"
+                    ? "btn-primary fw-bold text-white shadow-sm"
+                    : "btn-outline-secondary text-light bg-dark"
+                    }`}
                   onClick={() => setScoringViewMode("grid")}
                   title="Tampilkan semua jalur latihan sekaligus (Mode Grid)"
                 >
@@ -1591,11 +1838,10 @@ export const LiveScoring = () => {
                 </button>
                 <button
                   type="button"
-                  className={`btn ${
-                    scoringViewMode === "individual"
-                      ? "btn-warning fw-bold text-dark shadow-sm"
-                      : "btn-outline-secondary text-light bg-dark"
-                  }`}
+                  className={`btn ${scoringViewMode === "individual"
+                    ? "btn-warning fw-bold text-dark shadow-sm"
+                    : "btn-outline-secondary text-light bg-dark"
+                    }`}
                   onClick={() => {
                     setScoringViewMode("individual");
                     if (!selectedShooterId && displayedShooters.length > 0) {
@@ -1612,11 +1858,10 @@ export const LiveScoring = () => {
               <div className="btn-group btn-group-sm" role="group">
                 <button
                   type="button"
-                  className={`btn ${
-                    viewMode === "svg"
-                      ? "btn-info text-dark fw-bold"
-                      : "btn-outline-secondary text-light"
-                  }`}
+                  className={`btn ${viewMode === "svg"
+                    ? "btn-info text-dark fw-bold"
+                    : "btn-outline-secondary text-light"
+                    }`}
                   onClick={() => setViewMode("svg")}
                   title="Tampilkan Target Lesan Vektor"
                 >
@@ -1624,11 +1869,10 @@ export const LiveScoring = () => {
                 </button>
                 <button
                   type="button"
-                  className={`btn ${
-                    viewMode === "foto"
-                      ? "btn-info text-dark fw-bold"
-                      : "btn-outline-secondary text-light"
-                  }`}
+                  className={`btn ${viewMode === "foto"
+                    ? "btn-info text-dark fw-bold"
+                    : "btn-outline-secondary text-light"
+                    }`}
                   onClick={() => setViewMode("foto")}
                   title="Tampilkan Foto Kamera Deteksi AI"
                 >
@@ -1636,11 +1880,10 @@ export const LiveScoring = () => {
                 </button>
                 <button
                   type="button"
-                  className={`btn ${
-                    viewMode === "split"
-                      ? "btn-info text-dark fw-bold"
-                      : "btn-outline-secondary text-light"
-                  }`}
+                  className={`btn ${viewMode === "split"
+                    ? "btn-info text-dark fw-bold"
+                    : "btn-outline-secondary text-light"
+                    }`}
                   onClick={() => setViewMode("split")}
                   title="Tampilkan Target Vektor & Foto Kamera Berdampingan"
                 >
@@ -1653,11 +1896,10 @@ export const LiveScoring = () => {
                 <div className="btn-group btn-group-sm" role="group">
                   <button
                     type="button"
-                    className={`btn ${
-                      sortBy === "lane"
-                        ? "btn-light text-dark fw-bold"
-                        : "btn-outline-secondary text-light"
-                    }`}
+                    className={`btn ${sortBy === "lane"
+                      ? "btn-light text-dark fw-bold"
+                      : "btn-outline-secondary text-light"
+                      }`}
                     onClick={() => setSortBy("lane")}
                     title="Urutkan berdasarkan Nomor Jalur"
                   >
@@ -1665,11 +1907,10 @@ export const LiveScoring = () => {
                   </button>
                   <button
                     type="button"
-                    className={`btn ${
-                      sortBy === "score"
-                        ? "btn-light text-dark fw-bold"
-                        : "btn-outline-secondary text-light"
-                    }`}
+                    className={`btn ${sortBy === "score"
+                      ? "btn-light text-dark fw-bold"
+                      : "btn-outline-secondary text-light"
+                      }`}
                     onClick={() => setSortBy("score")}
                     title="Urutkan berdasarkan Peringkat Skor Tertinggi"
                   >
@@ -1701,7 +1942,7 @@ export const LiveScoring = () => {
             {scoringViewMode === "individual" && activeShooter && (
               <div className="d-flex align-items-center gap-2">
                 <span
-                  className="badge bg-warning text-dark fw-bold py-1 px-2.5 d-flex align-items-center gap-1 shadow-sm"
+                  className="badge bg-warning text-dark fw-bold py-1 px-2 d-flex align-items-center gap-1 shadow-sm"
                   style={{ fontSize: "0.75rem" }}
                 >
                   <i className="bi bi-person-fill"></i>
@@ -1746,130 +1987,237 @@ export const LiveScoring = () => {
           </div>
         ) : scoringViewMode === "individual" && activeShooter ? (
           /* ============================================================ */
-          /* MODE FOKUS PERORANGAN (LIVESCORE PER ORANG)                  */
+          /* MODE FOKUS PERORANGAN (LIVESCORE PER ORANG / MONITOR JALUR)  */
           /* ============================================================ */
           <div className="d-flex flex-column gap-3">
-            
-
-            {/* B. KARTU IDENTITAS PENEMBAK & LIVE KPI BANNER */}
+            {/* B. KARTU IDENTITAS PENEMBAK & LIVE KPI BANNER BESAR */}
             <div
-              className="card border-0 shadow-lg p-3 rounded-4 overflow-hidden position-relative"
+              className="card border-0 shadow-2xl p-3 rounded-4 overflow-hidden position-relative"
               style={{
-                backgroundColor: "rgba(15, 23, 42, 0.95)",
+                backgroundColor: "rgba(15, 23, 42, 0.98)",
                 backgroundImage:
-                  "radial-gradient(ellipse at 10% 20%, rgba(14, 165, 233, 0.12) 0%, rgba(15, 23, 42, 0.98) 70%)",
-                border: "1px solid rgba(14, 165, 233, 0.25)",
+                  "radial-gradient(ellipse at 10% 20%, rgba(14, 165, 233, 0.16) 0%, rgba(15, 23, 42, 0.99) 70%)",
+                border: "1px solid rgba(14, 165, 233, 0.35)",
+                boxShadow: "0 10px 30px rgba(0, 0, 0, 0.7)",
               }}
             >
-              <div className="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
-                {/* Identitas Penembak */}
-                <div className="d-flex align-items-center gap-3">
+              <div className="d-flex flex-wrap align-items-xl-center justify-content-between">
+                {/* Identitas Penembak & Badge Jalur Besar */}
+                <div className="col-12 col-lg-6 d-flex align-items-center gap-3 p-1">
                   <div
-                    className="badge bg-warning text-dark fw-bolder px-3 py-2.5 rounded-3 shadow d-flex flex-column align-items-center justify-content-center"
-                    style={{ minWidth: "90px" }}
+                    className="d-flex flex-column align-items-center justify-content-center px-3 py-2 rounded-4 shadow-lg border border-warning"
+                    style={{
+                      background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                      color: "#0f172a",
+                      minWidth: "120px",
+                      boxShadow: "0 0 25px rgba(245, 158, 11, 0.35)",
+                    }}
                   >
-                    <span style={{ fontSize: "0.68rem", letterSpacing: "1px" }}>JALUR</span>
-                    <span className="fs-3 lh-1">{activeShooter.lane}</span>
+                    <span
+                      className="fs-4 fw-bold text-uppercase"
+                      style={{ fontSize: "0.82rem", letterSpacing: "2.5px" }}
+                    >
+                      LANE
+                    </span>
+                    <span className="fw-bold lh-1" style={{ fontSize: "3.5rem" }}>
+                      {activeShooter.lane}
+                    </span>
                   </div>
 
                   <div>
                     <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
-                      <h3 className="fw-bold text-white mb-0">{activeShooter.nama}</h3>
+                      <h2
+                        className="fw-black text-white mb-0"
+                        style={{ fontSize: "1.75rem", letterSpacing: "0.5px" }}
+                      >
+                        {activeShooter.nama}
+                      </h2>
                       {renderBadgeKategori(activeShooter.currentKategori)}
                     </div>
-                    <div className="text-secondary small d-flex align-items-center gap-2 flex-wrap">
-                      <span>NRP: <strong className="text-light">{activeShooter.nrp || "-"}</strong></span>
-                      <span>•</span>
-                      <span>Satuan: <strong className="text-light">{activeShooter.satuan || "-"}</strong></span>
-                      <span>•</span>
+                    <div
+                      className="text-light d-flex align-items-center gap-2 flex-wrap"
+                      style={{ fontSize: "0.95rem" }}
+                    >
                       <span>
-                        Babak Aktif:{" "}
-                        <strong className="text-warning">
-                          Babak {currentBabak?.nomor_babak} ({currentBabak?.nama_babak})
+                        {" "}
+                        <strong className="text-white font-monospace">
+                          {activeShooter.nrp || "-"}
                         </strong>
+                      </span>
+                      <span className="text-white-50">•</span>
+                      <span>
+                        {" "}
+                        <strong className="text-white">
+                          {activeShooter.satuan || "-"}
+                        </strong>
+                      </span>
+                      <span>
+                        {" "}
+                        <span
+                          className="badge bg-warning text-dark fw-bold px-2 py-1"
+                          style={{ fontSize: "0.85rem" }}
+                        >
+                          Babak {currentBabak?.nomor_babak}: {currentBabak?.nama_babak}
+                        </span>
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* 4 Mini KPI Cards */}
-                <div className="row g-2 flex-grow-1 flex-lg-grow-0" style={{ minWidth: "460px" }}>
-                  <div className="col-6 col-sm-3">
+                {/* 4 Mini KPI Cards (Angka Besar Kontras Tinggi) */}
+                <div
+                  className="col-12 col-lg-6 d-flex flex-wrap p-1"
+                >
+                  <div className="col-6 col-sm-3 p-1">
                     <div
-                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
-                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                      className="p-2 rounded-3 text-center border border-warning border-opacity-30 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
                     >
-                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
-                        Skor Babak {currentBabak?.nomor_babak}
-                      </small>
-                      <div className="fw-bold fs-4 text-warning my-0.5">
-                        {activeShooter.currentBabakScore}
-                        <span className="text-secondary fs-6 fw-normal">/{activeShooter.currentBabakMax}</span>
+                      <span
+                        className="fw-bold text-warning text-uppercase d-block"
+                        style={{ fontSize: "0.76rem", letterSpacing: "0.8px" }}
+                      >
+                        <i className="bi bi-bullseye me-1"></i> Skor
+                      </span>
+                      <div className="my-1">
+                        <span
+                          className="fw-black text-warning font-monospace"
+                          style={{ fontSize: "2.5rem", lineHeight: 1 }}
+                        >
+                          {activeShooter.currentBabakScore}
+                        </span>
+                        <span className="text-white-50 fs-6 fw-bold">
+                          /{activeShooter.currentBabakMax}
+                        </span>
                       </div>
-                      <div className="progress bg-dark" style={{ height: "4px" }}>
+                      <div
+                        className="progress bg-black bg-opacity-75 my-1"
+                        style={{ height: "6px" }}
+                      >
                         <div
-                          className="progress-bar bg-warning"
+                          className="progress-bar bg-warning shadow-sm"
                           style={{
-                            width: `${Math.min(100, (activeShooter.currentBabakScore / (activeShooter.currentBabakMax || 1)) * 100)}%`,
+                            width: `${Math.min(
+                              100,
+                              (activeShooter.currentBabakScore /
+                                (activeShooter.currentBabakMax || 1)) *
+                              100
+                            )}%`,
                           }}
                         />
                       </div>
-                      <small className="text-white-50 d-block mt-1" style={{ fontSize: "0.65rem" }}>
-                        Akurasi: {activeShooter.currentBabakAkurasi}%
-                      </small>
+                      <span
+                        className="text-white-50 d-block"
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        Akurasi:{" "}
+                        <strong className="text-warning font-monospace">
+                          {activeShooter.currentBabakAkurasi}%
+                        </strong>
+                      </span>
                     </div>
                   </div>
 
-                  <div className="col-6 col-sm-3">
+                  <div className="col-6 col-sm-3 p-1">
                     <div
-                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
-                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                      className="p-2 rounded-3 text-center border border-danger border-opacity-30 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
                     >
-                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
-                        Bullseye (10 / X)
-                      </small>
-                      <div className="fw-bold fs-4 text-danger my-0.5">
-                        {activeShooter.currentBabakBullseye}
-                        <span className="text-secondary fs-6 fw-normal"> Butir</span>
+                      <span
+                        className="fw-bold text-danger text-uppercase d-block"
+                        style={{ fontSize: "0.76rem", letterSpacing: "0.8px" }}
+                      >
+                        <i className="bi bi-star-fill me-1"></i> Bullseye
+                      </span>
+                      <div className="my-1">
+                        <span
+                          className="fw-black text-danger font-monospace"
+                          style={{ fontSize: "2.1rem", lineHeight: 1 }}
+                        >
+                          {activeShooter.currentBabakBullseye}
+                        </span>
+                        <span className="text-white-50 fs-6 fw-bold"> Butir</span>
                       </div>
-                      <small className="text-secondary d-block mt-2" style={{ fontSize: "0.68rem" }}>
-                        Peluru: <strong className="text-light">{activeShooter.currentBabakHits.length}</strong> / {currentBabak?.jumlah_peluru || 10}
-                      </small>
+                      <span
+                        className="text-white-50 d-block mt-2"
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        Peluru:{" "}
+                        <strong className="text-white font-monospace">
+                          {activeShooter.currentBabakHits.length}
+                        </strong>{" "}
+                        / {currentBabak?.jumlah_peluru || 10}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="col-6 col-sm-3">
+                  <div className="col-6 col-sm-3 p-1">
                     <div
-                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
-                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                      className="p-2 rounded-3 text-center border border-info border-opacity-30 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
                     >
-                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
-                        Grouping & MPI
-                      </small>
-                      <div className="fw-bold fs-6 text-info my-2">
-                        ±{activeShooter.currentBabakBallistics.grouping ?? "-"} <span className="fs-6 fw-normal">mm</span>
+                      <span
+                        className="fw-bold text-info text-uppercase d-block"
+                        style={{ fontSize: "0.76rem", letterSpacing: "0.8px" }}
+                      >
+                        <i className="bi bi-compass me-1"></i> Grp   & MPI
+                      </span>
+                      <div className="my-1">
+                        <span
+                          className="fw-black text-info font-monospace"
+                          style={{ fontSize: "2.0rem", lineHeight: 1 }}
+                        >
+                          ±{activeShooter.currentBabakBallistics.grouping ?? "-"}
+                        </span>
+                        <span className="text-white-50 fs-6 fw-bold"> mm</span>
                       </div>
-                      <small className="text-secondary d-block" style={{ fontSize: "0.65rem" }}>
-                        Offset: X {activeShooter.currentBabakBallistics.offsetX !== null && activeShooter.currentBabakBallistics.offsetX !== undefined ? `${activeShooter.currentBabakBallistics.offsetX > 0 ? "+" : ""}${activeShooter.currentBabakBallistics.offsetX}` : 0} | Y {activeShooter.currentBabakBallistics.offsetY !== null && activeShooter.currentBabakBallistics.offsetY !== undefined ? `${activeShooter.currentBabakBallistics.offsetY > 0 ? "+" : ""}${activeShooter.currentBabakBallistics.offsetY}` : 0}
-                      </small>
+                      <span
+                        className="text-white-50 d-block mt-2 font-monospace"
+                        style={{ fontSize: "0.72rem" }}
+                      >
+                        X:{" "}
+                        {activeShooter.currentBabakBallistics.offsetX > 0
+                          ? `+${activeShooter.currentBabakBallistics.offsetX}`
+                          : activeShooter.currentBabakBallistics.offsetX ?? 0}{" "}
+                        | Y:{" "}
+                        {activeShooter.currentBabakBallistics.offsetY > 0
+                          ? `+${activeShooter.currentBabakBallistics.offsetY}`
+                          : activeShooter.currentBabakBallistics.offsetY ?? 0}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="col-6 col-sm-3">
+                  <div className="col-6 col-sm-3 p-1">
                     <div
-                      className="p-2 rounded-3 text-center border border-secondary border-opacity-25 h-100"
-                      style={{ backgroundColor: "rgba(10, 15, 29, 0.7)" }}
+                      className="p-2 rounded-3 text-center border border-success border-opacity-30 h-100"
+                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
                     >
-                      <small className="text-secondary d-block" style={{ fontSize: "0.68rem" }}>
-                        Total
-                      </small>
-                      <div className="fw-bold fs-4 text-success my-0.5">
-                        {activeShooter.total_skor}
-                        <span className="text-secondary fs-6 fw-normal">/{activeShooter.total_max}</span>
+                      <span
+                        className="fw-bold text-success text-uppercase d-block"
+                        style={{ fontSize: "0.76rem", letterSpacing: "0.8px" }}
+                      >
+                        <i className="bi bi-trophy-fill me-1"></i> Total Skor
+                      </span>
+                      <div className="my-1">
+                        <span
+                          className="fw-black text-success font-monospace"
+                          style={{ fontSize: "2.1rem", lineHeight: 1 }}
+                        >
+                          {activeShooter.total_skor}
+                        </span>
+                        <span className="text-white-50 fs-6 fw-bold">
+                          /{activeShooter.total_max}
+                        </span>
                       </div>
-                      <small className="text-success d-block mt-2" style={{ fontSize: "0.68rem" }}>
-                        Akurasi : <strong>{activeShooter.akurasi_akhir}%</strong>
-                      </small>
+                      <span
+                        className="text-white-50 d-block mt-2"
+                        style={{ fontSize: "0.78rem" }}
+                      >
+                        Akurasi:{" "}
+                        <strong className="text-success font-monospace">
+                          {activeShooter.akurasi_akhir}%
+                        </strong>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1878,109 +2226,151 @@ export const LiveScoring = () => {
 
             {/* C. DUA KOLOM: VISUAL TARGET DI KIRI & ANALISIS / TABEL DETAIL DI KANAN */}
             <div className="row g-3">
-              {/* KOLOM KIRI: TARGET VISUALIZER & KAMERA DETEKSI */}
-              <div className="col-12 col-xl-6">
+              {/* KOLOM KIRI: TARGET VISUALIZER & KAMERA DETEKSI BESAR */}
+              <div className="col-12 col-lg-6">
                 <div
                   className="card border-0 shadow-lg rounded-4 overflow-hidden h-100"
                   style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: "rgba(15, 23, 42, 0.95)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
                   }}
                 >
                   <div
-                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2"
-                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+                    className="card-header py-3 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2"
+                    style={{ backgroundColor: "rgba(10, 15, 29, 0.95)" }}
                   >
-                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
-                      <i className="bi bi-bullseye text-danger"></i>
-                      Visualisasi Sasaran Tembak (Babak {currentBabak?.nomor_babak})
+                    <span
+                      className="fw-bold text-white d-flex align-items-center gap-2"
+                      style={{ fontSize: "0.95rem" }}
+                    >
+                      <i className="bi bi-bullseye text-danger fs-5"></i>
+                      Visualisasi Sasaran Tembak
                     </span>
 
                     <div className="btn-group btn-group-sm" role="group">
                       <button
                         type="button"
-                        className={`btn ${viewMode === "svg" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        className={`btn ${viewMode === "svg"
+                          ? "btn-info text-dark fw-bold shadow-sm"
+                          : "btn-outline-secondary text-light py-1 px-2"
+                          }`}
                         onClick={() => setViewMode("svg")}
-                        style={{ fontSize: "0.72rem" }}
+                        style={{ fontSize: "0.8rem" }}
                       >
                         <i className="bi bi-bullseye me-1"></i> Lesan SVG
                       </button>
                       <button
                         type="button"
-                        className={`btn ${viewMode === "foto" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        className={`btn ${viewMode === "foto"
+                          ? "btn-info text-dark fw-bold shadow-sm"
+                          : "btn-outline-secondary text-light py-1 px-2"
+                          }`}
                         onClick={() => setViewMode("foto")}
-                        style={{ fontSize: "0.72rem" }}
+                        style={{ fontSize: "0.8rem" }}
                       >
                         <i className="bi bi-camera me-1"></i> Foto AI
                       </button>
                       <button
                         type="button"
-                        className={`btn ${viewMode === "split" ? "btn-info text-dark fw-bold" : "btn-outline-secondary text-light py-0.5 px-2"}`}
+                        className={`btn ${viewMode === "split"
+                          ? "btn-info text-dark fw-bold shadow-sm"
+                          : "btn-outline-secondary text-light py-1 px-2"
+                          }`}
                         onClick={() => setViewMode("split")}
-                        style={{ fontSize: "0.72rem" }}
+                        style={{ fontSize: "0.8rem" }}
                       >
                         <i className="bi bi-layout-split me-1"></i> Split
                       </button>
                     </div>
                   </div>
 
-                  <div className="card-body p-3 d-flex flex-column align-items-center justify-content-center">
-                    {/* Render Berdasarkan ViewMode */}
+                  <div className="card-body p-3 d-flex flex-column align-items-center">
+                    {/* Render Berdasarkan ViewMode dengan Kontainer Besar */}
                     {viewMode === "split" ? (
-                      <div className="row g-2 w-100 align-items-center">
+                      <div className="row g-3 w-100 align-items-center">
                         <div className="col-12 col-md-6 text-center">
-                          <div className="bg-black rounded-3 p-2 shadow position-relative mx-auto" style={{ maxWidth: "340px" }}>
+                          <div
+                            className="bg-black rounded-4 p-2 shadow position-relative mx-auto border border-secondary border-opacity-25"
+                            style={{ maxWidth: "460px" }}
+                          >
                             {renderLargeSvgTarget(activeShooter)}
-                            <small className="text-secondary d-block mt-1" style={{ fontSize: "0.68rem" }}>
+                            <span
+                              className="text-white-50 d-block mt-2 fw-semibold"
+                              style={{ fontSize: "0.82rem" }}
+                            >
                               Lesan Vektor SVG
-                            </small>
+                            </span>
                           </div>
                         </div>
                         <div className="col-12 col-md-6 text-center">
                           <div
-                            className="bg-black rounded-3 p-2 shadow d-flex flex-column align-items-center justify-content-center mx-auto"
-                            style={{ maxWidth: "340px", minHeight: "260px" }}
+                            className="bg-black rounded-4 p-2 shadow d-flex flex-column align-items-center justify-content-center mx-auto border border-secondary border-opacity-25"
+                            style={{ maxWidth: "460px", minHeight: "380px" }}
                           >
                             {renderPhotoTarget(activeShooter)}
-                            <small className="text-secondary d-block mt-1" style={{ fontSize: "0.68rem" }}>
+                            <span
+                              className="text-white-50 d-block mt-2 fw-semibold"
+                              style={{ fontSize: "0.82rem" }}
+                            >
                               Foto Deteksi SITRAK-Detect
-                            </small>
+                            </span>
                           </div>
                         </div>
                       </div>
                     ) : viewMode === "foto" ? (
-                      <div className="w-100 text-center py-2">
+                      <div className="w-100 text-center">
                         <div
-                          className="bg-black rounded-3 p-2 shadow mx-auto d-flex flex-column align-items-center justify-content-center"
-                          style={{ maxWidth: "440px", minHeight: "340px" }}
+                          className="bg-black rounded-4 p-3 shadow-lg mx-auto d-flex flex-column align-items-center justify-content-center border border-secondary border-opacity-35"
+                          style={{ maxWidth: "580px", minHeight: "440px" }}
                         >
                           {renderPhotoTarget(activeShooter)}
                         </div>
                       </div>
                     ) : (
-                      <div className="w-100 text-center py-2">
-                        <div className="bg-black rounded-3 p-2 shadow mx-auto position-relative" style={{ maxWidth: "420px" }}>
+                      <div className="w-100 text-center">
+                        <div
+                          className="bg-black rounded-4 shadow-2xl mx-auto position-relative border border-secondary border-opacity-35"
+                          style={{
+                            backgroundColor: "#05070f",
+                            boxShadow:
+                              "0 15px 35px rgba(0, 0, 0, 0.8), inset 0 0 50px rgba(0, 0, 0, 0.9)",
+                          }}
+                        >
                           {renderLargeSvgTarget(activeShooter)}
                         </div>
                       </div>
                     )}
 
-                    {/* Ringkasan Indikator / Legend Target */}
-                    <div className="mt-3 pt-2 border-top border-secondary border-opacity-25 w-100 d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                      <div className="d-flex align-items-center gap-2 flex-wrap" style={{ fontSize: "0.72rem" }}>
-                        <span className="text-secondary">Keterangan:</span>
-                        <span className="badge bg-danger text-white">● 10 / X (Bullseye)</span>
-                        <span className="badge bg-success text-white">● Ring 9</span>
-                        <span className="badge bg-info text-dark">● Ring 8</span>
-                        <span className="badge bg-warning text-dark">● Ring ≤ 7</span>
+                    {/* Ringkasan Indikator / Legend Target (Jelas & Terbaca) */}
+                    <div className="mt-3 pt-2 border-top border-secondary border-opacity-25 w-100 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                      <div
+                        className="d-flex align-items-center gap-2 flex-wrap"
+                        style={{ fontSize: "0.84rem" }}
+                      >
+                        <span className="text-white-50 fw-semibold">Keterangan :</span>
+                        <span className="badge bg-danger text-white px-2 py-1 fw-bold">
+                          ● 10 / X (Bullseye)
+                        </span>
+                        <span className="badge bg-success text-white px-2 py-1 fw-bold">
+                          ● Ring 9
+                        </span>
+                        <span className="badge bg-info text-dark px-2 py-1 fw-bold">
+                          ● Ring 8
+                        </span>
+                        <span className="badge bg-warning text-dark px-2 py-1 fw-bold">
+                          ● Ring ≤ 7
+                        </span>
                       </div>
                       {highlightedHitNomor && (
-                        <span className="badge bg-info text-dark fw-bold animate-pulse" style={{ fontSize: "0.72rem" }}>
+                        <span
+                          className="badge bg-info text-dark fw-bold px-2 py-1 shadow"
+                          style={{ fontSize: "0.82rem" }}
+                        >
                           Menyorot Peluru #{highlightedHitNomor}
                           <button
                             type="button"
-                            className="btn-close btn-close-white ms-1"
-                            style={{ fontSize: "0.55rem" }}
+                            className="btn-close btn-close-white ms-2"
+                            style={{ fontSize: "0.6rem" }}
                             onClick={() => setHighlightedHitNomor(null)}
                           />
                         </span>
@@ -1990,54 +2380,101 @@ export const LiveScoring = () => {
                 </div>
               </div>
 
-              {/* KOLOM KANAN: CATATAN TAKTIS & TABEL DETAIL TEMBAKAN & RIWAYAT BABAK */}
-              <div className="col-12 col-xl-6 d-flex flex-column gap-3">
-                {/* 1. CATATAN ANALISIS TAKTIS */}
-                {renderIndividualAnalysis(activeShooter)}
-
-                {/* 2. TABEL RINCIAN TIAP BUTIR TEMBAKAN */}
-                <div
-                  className="card border-0 shadow-lg rounded-4 overflow-hidden"
-                  style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                  }}
-                >
-                  <div
-                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
-                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
-                  >
-                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
-                      <i className="bi bi-list-ol text-warning"></i>
-                      Rincian Tembakan Tiap Butir (Babak {currentBabak?.nomor_babak})
-                    </span>
-                    <span className="badge bg-secondary text-light small" style={{ fontSize: "0.68rem" }}>
-                      {activeShooter.currentBabakHits.length} Butir Terdeteksi
-                    </span>
+              {/* KOLOM KANAN: CARD CATATAN ANALISIS & CARD RINCIAN PERKENAAN (BERSEBELAHAN) & REKAP BABAK */}
+              <div className="col-12 col-lg-6 d-flex flex-column gap-3">
+                {/* BARIS DUA CARD BERSEBELAHAN */}
+                <div className="row g-3 align-items-stretch">
+                  {/* 1. CATATAN ANALISIS TAKTIS */}
+                  <div className="col-12 col-lg-6 d-flex flex-column">
+                    {renderIndividualAnalysis(activeShooter)}
                   </div>
 
-                  <div className="card-body p-0">
-                    {renderShotByShotTable(activeShooter)}
+                  {/* 2. TABEL RINCIAN PERKENAAN TEMBAKAN */}
+                  <div className="col-12 col-lg-6 d-flex flex-column">
+                    <div
+                      className="card border-0 shadow-lg rounded-4 overflow-hidden h-100"
+                      style={{
+                        backgroundColor: "rgba(15, 23, 42, 0.95)",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                      }}
+                    >
+                      <div
+                        className="card-header py-2 px-3 border-secondary border-opacity-25 d-flex flex-wrap justify-content-between align-items-center gap-2"
+                        style={{ backgroundColor: "rgba(10, 15, 29, 0.95)" }}
+                      >
+                        <div className="d-flex align-items-center gap-1">
+                          <i className="bi bi-pie-chart-fill text-warning fs-6"></i>
+                          <span
+                            className="fw-bold text-warning"
+                            style={{ fontSize: "0.92rem" }}
+                          >
+                            Rincian Perkenaan (B{currentBabak?.nomor_babak})
+                          </span>
+                          <span
+                            className="badge bg-secondary-subtle text-light border border-secondary px-1 py-0 fw-bold"
+                            style={{ fontSize: "0.75rem" }}
+                          >
+                            {activeShooter.currentBabakHits.length} Butir
+                          </span>
+                        </div>
+
+                        <div className="btn-group btn-group-sm" role="group" aria-label="Tampilan Rincian Tembakan">
+                          <button
+                            type="button"
+                            className={`btn btn-sm py-0 px-2 ${shotTableViewMode === "breakdown"
+                              ? "btn-warning text-dark fw-bold shadow-sm"
+                              : "btn-outline-secondary text-light"
+                              }`}
+                            onClick={() => setShotTableViewMode("breakdown")}
+                            title="Tampilkan distribusi rincian perkenaan poin"
+                            style={{ fontSize: "0.76rem" }}
+                          >
+                            <i className="bi bi-pie-chart-fill me-1"></i> Poin
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn btn-sm py-0 px-2 ${shotTableViewMode === "detail"
+                              ? "btn-warning text-dark fw-bold shadow-sm"
+                              : "btn-outline-secondary text-light"
+                              }`}
+                            onClick={() => setShotTableViewMode("detail")}
+                            title="Tampilkan koordinat & jarak pusat tiap butir"
+                            style={{ fontSize: "0.76rem" }}
+                          >
+                            <i className="bi bi-list-ol me-1"></i> Detail
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="card-body p-0 d-flex flex-column justify-content-between">
+                        {renderShotByShotTable(activeShooter)}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 {/* 3. REKAP SELURUH BABAK UNTUK PENEMBAK INI */}
-                <div
-                  className="card border-0 shadow-lg rounded-4 overflow-hidden"
+                <div className="card border-0 shadow-lg rounded-4 overflow-hidden"
                   style={{
-                    backgroundColor: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    backgroundColor: "rgba(15, 23, 42, 0.95)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
                   }}
                 >
                   <div
-                    className="card-header py-2.5 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
-                    style={{ backgroundColor: "rgba(10, 15, 29, 0.9)" }}
+                    className="card-header py-3 px-3 border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                    style={{ backgroundColor: "rgba(10, 15, 29, 0.95)" }}
                   >
-                    <span className="fw-semibold text-white d-flex align-items-center gap-1.5" style={{ fontSize: "0.82rem" }}>
-                      <i className="bi bi-clipboard2-data text-primary"></i>
+                    <span
+                      className="fw-bold text-primary d-flex align-items-center gap-2"
+                      style={{ fontSize: "0.95rem" }}
+                    >
+                      <i className="bi bi-clipboard2-data-fill text-primary fs-5"></i>
                       Rekapitulasi Riwayat Seluruh Babak Sesi Ini
                     </span>
-                    <span className="text-secondary small" style={{ fontSize: "0.7rem" }}>
+                    <span
+                      className="text-white-50"
+                      style={{ fontSize: "0.8rem" }}
+                    >
                       Klik babak untuk melihat detail live
                     </span>
                   </div>
@@ -2053,7 +2490,7 @@ export const LiveScoring = () => {
           /* ============================================================ */
           /* MODE GRID (SEMUA LANE)                                       */
           /* ============================================================ */
-          <div className="row g-3 g-xl-4 align-items-stretch">
+          <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-5 g-3">
             {displayedShooters.map((shooter) => {
               const rank =
                 sortedByScoreDesc.findIndex(
@@ -2073,17 +2510,16 @@ export const LiveScoring = () => {
                 <div
                   key={shooter.id_personel_penembak}
                   className={
-                    displayedShooters.length <= 2
-                      ? "col-12 col-lg-6"
-                      : displayedShooters.length <= 4
-                        ? "col-12 col-md-6 col-xl-3"
-                        : "col-12 col-md-6 col-lg-4 col-xl-3"
+                    displayedShooters.length <= 4
+                      ? "col"
+                      : "col"
                   }
                 >
+
                   <div
                     className={`card h-100 border-0 shadow-lg position-relative overflow-hidden ${isTop3
-                        ? "border-top border-warning border-3"
-                        : "border-top border-primary border-3"
+                      ? "border-top border-warning border-3"
+                      : "border-top border-primary border-3"
                       }`}
                     style={{
                       backgroundColor: "rgba(15, 23, 42, 0.95)",
@@ -2098,26 +2534,33 @@ export const LiveScoring = () => {
                     >
                       {/* Jalur / Lane Badge */}
                       <div className="d-flex align-items-center gap-2">
-                        <span
-                          className={`badge px-3 py-2 fw-bold fs-6 shadow-sm ${isTop3
-                              ? "bg-warning text-dark"
-                              : "bg-primary text-white"
+                        <button
+                          className={`btn fw-bold fs-6 shadow-sm ${isTop3
+                            ? "btn-warning text-dark"
+                            : "btn-primary text-white"
                             }`}
+                          onClick={() => {
+                            setSelectedShooterId(shooter.id_personel_penembak);
+                            setHighlightedHitNomor(null);
+                            setScoringViewMode("individual");
+                          }}
                         >
-                          LANE {shooter.lane}
-                        </span>
-                        {shooter.currentBabakScore > 0 && (
-                          <span
-                            className="badge bg-dark border border-secondary text-white-50"
-                            style={{ fontSize: "0.75rem" }}
-                          >
-                            #{rank}
-                          </span>
-                        )}
+                          LANE {shooter.lane} &nbsp;&nbsp;
+                          <i className="bi bi-arrow-right"></i>
+                        </button>
                       </div>
-
-                      {/* Status Kelulusan */}
-                      <div>{renderBadgeKategori(shooter.currentKategori)}</div>
+                      <div className="d-flex justify-content-end align-items-center">
+                        <div className="px-2 bg-black bg-opacity-25 rounded-3 border border-secondary border-opacity-25">
+                          <div className="d-flex align-items-baseline gap-1">
+                            <span className="display-6 fw-bold text-warning lh-1 font-monospace">
+                              {shooter.currentBabakScore}
+                            </span>
+                            <span className="text-secondary fs-small">
+                              / {shooter.currentBabakMax}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Informasi Identitas Penembak */}
@@ -2125,52 +2568,14 @@ export const LiveScoring = () => {
                       <div className="fw-bold text-white fs-6 text-truncate">
                         {shooter.nama}
                       </div>
-                      <div
-                        className="text-secondary small d-flex justify-content-between align-items-center"
-                        style={{ fontSize: "0.76rem" }}
-                      >
-                        <span>NRP: {shooter.nrp}</span>
-                        <span>{shooter.satuan}</span>
-                      </div>
                     </div>
 
                     {/* Score Bar Display (Skor Besar) */}
                     <div className="p-3 bg-black bg-opacity-25 mx-3 my-2 rounded-3 border border-secondary border-opacity-25">
-                      <div className="d-flex justify-content-between align-items-end">
-                        <div>
-                          <small className="text-secondary d-block" style={{ fontSize: "0.75rem" }}>
-                            SKOR BABAK {currentBabak?.nomor_babak || 1}
-                          </small>
-                          <div className="d-flex align-items-baseline gap-1">
-                            <span className="display-6 fw-bold text-warning lh-1 font-monospace">
-                              {shooter.currentBabakScore}
-                            </span>
-                            <span className="text-secondary fs-6">
-                              / {shooter.currentBabakMax}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="text-end">
-                          <small className="text-secondary d-block" style={{ fontSize: "0.75rem" }}>
-                            AKURASI
-                          </small>
-                          <span
-                            className={`fs-5 fw-bold font-monospace ${shooter.currentBabakAkurasi >= 80
-                                ? "text-success"
-                                : shooter.currentBabakAkurasi >= 60
-                                  ? "text-warning"
-                                  : "text-secondary"
-                              }`}
-                          >
-                            {shooter.currentBabakAkurasi}%
-                          </span>
-                        </div>
-                      </div>
 
                       {/* Info Tambahan: Butir & Bullseye */}
                       <div
-                        className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary border-opacity-25 text-secondary"
+                        className="d-flex justify-content-between align-items-center text-secondary"
                         style={{ fontSize: "0.74rem" }}
                       >
                         <span>
@@ -2239,13 +2644,17 @@ export const LiveScoring = () => {
                                   className="w-100 h-auto"
                                   style={{ maxHeight: "160px" }}
                                 >
-                                  <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="1" />
-                                  <circle cx="50" cy="50" r="40" fill="#e9ecef" stroke="#212529" strokeWidth="1" />
-                                  <circle cx="50" cy="50" r="32" fill="#ced4da" stroke="#212529" strokeWidth="1" />
-                                  <circle cx="50" cy="50" r="24" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                                  <circle cx="50" cy="50" r="16" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                                  <circle cx="50" cy="50" r="8" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                                  <circle cx="50" cy="50" r="3" fill="#dc3545" stroke="#fff" strokeWidth="0.5" />
+                                  <circle cx="50" cy="50" r="48" fill="#f8fafc" stroke="#0f172a" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="43.2" fill="#f1f5f9" stroke="#0f172a" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="38.4" fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="33.6" fill="#cbd5e1" stroke="#0f172a" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="28.8" fill="#94a3b8" stroke="#0f172a" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="24" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="19.2" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="14.4" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="9.6" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="4.8" fill="#dc2626" stroke="#ffffff" strokeWidth="0.4" />
+                                  <circle cx="50" cy="50" r="2" fill="#991b1b" stroke="#ffffff" strokeWidth="0.4" />
                                   <line x1="50" y1="2" x2="50" y2="98" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
                                   <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
                                   {shooter.currentBabakHits.map((h, i) => {
@@ -2302,13 +2711,17 @@ export const LiveScoring = () => {
                             className="w-100 h-auto"
                             style={{ maxHeight: "220px" }}
                           >
-                            <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="1" />
-                            <circle cx="50" cy="50" r="40" fill="#e9ecef" stroke="#212529" strokeWidth="1" />
-                            <circle cx="50" cy="50" r="32" fill="#ced4da" stroke="#212529" strokeWidth="1" />
-                            <circle cx="50" cy="50" r="24" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                            <circle cx="50" cy="50" r="16" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                            <circle cx="50" cy="50" r="8" fill="#212529" stroke="#fff" strokeWidth="0.8" />
-                            <circle cx="50" cy="50" r="3" fill="#dc3545" stroke="#fff" strokeWidth="0.5" />
+                            <circle cx="50" cy="50" r="48" fill="#f8fafc" stroke="#0f172a" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="43.2" fill="#f1f5f9" stroke="#0f172a" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="38.4" fill="#e2e8f0" stroke="#0f172a" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="33.6" fill="#cbd5e1" stroke="#0f172a" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="28.8" fill="#94a3b8" stroke="#0f172a" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="24" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="19.2" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="14.4" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="9.6" fill="#09090b" stroke="#ffffff" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="4.8" fill="#dc2626" stroke="#ffffff" strokeWidth="0.4" />
+                            <circle cx="50" cy="50" r="2" fill="#991b1b" stroke="#ffffff" strokeWidth="0.4" />
                             <line x1="50" y1="2" x2="50" y2="98" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
                             <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
 
@@ -2378,198 +2791,223 @@ export const LiveScoring = () => {
                         </div>
                       )}
                     </div>
-
-                    {/* BUTIR PELURU STRIP (CHIPS NILAI TIAP TEMBAKAN) */}
-                    <div className="p-3 border-top border-secondary border-opacity-25">
-                      <div className="d-flex justify-content-between align-items-center mb-1">
-                        <small className="text-secondary" style={{ fontSize: "0.72rem" }}>
-                          Rincian Butir Peluru:
-                        </small>
-                        {shooter.currentBabakBallistics.grouping && (
-                          <small className="text-success" style={{ fontSize: "0.72rem" }}>
-                            Grouping: ±{shooter.currentBabakBallistics.grouping} mm
-                          </small>
-                        )}
-                      </div>
-
-                      {hasHits ? (
-                        <div
-                          className="d-flex flex-wrap gap-1"
-                          style={{ maxHeight: "65px", overflowY: "auto" }}
-                        >
-                          {shooter.currentBabakHits.map((h, hIdx) => {
-                            const isBull =
-                              h.poin === 10 ||
-                              h.ring === "10" ||
-                              String(h.ring).toLowerCase().includes("bull");
-                            return (
-                              <span
-                                key={hIdx}
-                                className={`badge font-monospace px-2 py-1 ${isBull
-                                    ? "bg-danger text-white border border-danger"
-                                    : h.poin >= 9
-                                      ? "bg-success text-white"
-                                      : h.poin >= 7
-                                        ? "bg-primary text-white"
-                                        : "bg-secondary text-white"
-                                  }`}
-                                style={{ fontSize: "0.72rem" }}
-                                title={`Peluru #${h.nomor || hIdx + 1}: Skor ${h.poin
-                                  } (Ring ${h.ring})`}
-                              >
-                                #{h.nomor || hIdx + 1}: {h.poin}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-center py-2 text-secondary small fst-italic" style={{ fontSize: "0.75rem" }}>
-                          Belum ada data tembakan
-                        </div>
-                      )}
-                    </div>
-
-                    {/* CATATAN ANALISIS & REKOMENDASI TAKTIS */}
-                    {(() => {
-                      const rawCatatan =
-                        shooter.currentBabakCatatan ||
-                        shooter.currentBabakBallistics?.catatan;
-                      const parsed = parseCatatanAnalisis(rawCatatan);
-                      const hasCatatan = Boolean(
-                        rawCatatan &&
-                          (parsed.items.length > 0 || parsed.warning)
-                      );
-
-                      return (
-                        <div
-                          className="p-3 border-top border-secondary border-opacity-25"
-                          style={{
-                            backgroundColor: "rgba(10, 15, 29, 0.6)",
-                          }}
-                        >
-                          <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span
-                              className="text-info fw-semibold d-flex align-items-center gap-1"
-                              style={{ fontSize: "0.72rem" }}
-                            >
-                              <i className="bi bi-chat-left-text-fill text-info"></i>
-                              Catatan Analisis:
-                            </span>
-                            {shooter.currentBabakBallistics?.status && (
-                              <span
-                                className="badge bg-primary text-white"
-                                style={{ fontSize: "0.62rem" }}
-                              >
-                                {shooter.currentBabakBallistics.status}
-                              </span>
-                            )}
-                          </div>
-
-                          {hasCatatan ? (
-                            <div>
-                              {parsed.warning && (
-                                <div
-                                  className="alert alert-warning py-1 px-2 mb-1 border border-warning border-opacity-50 text-warning-emphasis d-flex align-items-start gap-1"
-                                  style={{
-                                    fontSize: "0.68rem",
-                                    backgroundColor: "rgba(234, 179, 8, 0.12)",
-                                    lineHeight: 1.3,
-                                  }}
-                                >
-                                  <i
-                                    className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      marginTop: "1px",
-                                    }}
-                                  ></i>
-                                  <div>
-                                    <strong className="text-warning">
-                                      Koreksi Kuota:
-                                    </strong>{" "}
-                                    {parsed.warning.replace(
-                                      /^Peringatan Kuota Peluru:\s*/i,
-                                      ""
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                              {parsed.items.length > 1 ? (
-                                <ul
-                                  className="mb-0 ps-3 text-white-50"
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    lineHeight: 1.45,
-                                    maxHeight: "85px",
-                                    overflowY: "auto",
-                                  }}
-                                >
-                                  {parsed.items.map((item, idx) => (
-                                    <li key={idx} className="mb-1 text-light">
-                                      {item}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p
-                                  className="mb-0 text-light"
-                                  style={{
-                                    fontSize: "0.72rem",
-                                    lineHeight: 1.45,
-                                    maxHeight: "85px",
-                                    overflowY: "auto",
-                                  }}
-                                >
-                                  {parsed.items[0] || rawCatatan}
-                                </p>
-                              )}
-                            </div>
-                          ) : (
-                            <div
-                              className="text-secondary small fst-italic py-1"
-                              style={{ fontSize: "0.72rem" }}
-                            >
-                              Belum ada catatan analisis tembakan
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                    {/* TOMBOL AKSI: LIHAT LIVESCORE PER ORANG */}
-                    <div
-                      className="p-2.5 px-3 border-top border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
-                      style={{ backgroundColor: "rgba(10, 15, 29, 0.85)" }}
-                    >
-                      <span
-                        className="text-secondary small text-truncate me-2"
-                        style={{ fontSize: "0.7rem" }}
-                      >
-                        {shooter.nrp
-                          ? `NRP ${shooter.nrp}`
-                          : shooter.satuan || `Jalur ${shooter.lane}`}
-                      </span>
-                      <button
-                        type="button"
-                        className="btn btn-sm btn-outline-info fw-semibold py-1 px-2.5 d-flex align-items-center gap-1.5 shadow-sm text-nowrap"
-                        style={{ fontSize: "0.74rem" }}
-                        onClick={() => {
-                          setSelectedShooterId(shooter.id_personel_penembak);
-                          setHighlightedHitNomor(null);
-                          setScoringViewMode("individual");
-                        }}
-                        title={`Buka mode livescore detail per orang untuk ${shooter.nama}`}
-                      >
-                        <i className="bi bi-person-bounding-box text-info"></i>
-                        <span>Livescore Per Orang</span>
-                        <i className="bi bi-arrow-right small text-info opacity-75"></i>
-                      </button>
-                    </div>
                   </div>
                 </div>
               );
             })}
+            {displayedShooters.length < 10 && (
+              <>
+                {Array.from({ length: 10 - displayedShooters.length }, (_, i) => (
+                  /*<div key={`placeholder-${i}`} className="col">
+                    <div
+                      className="card h-100 border-0 shadow-lg position-relative overflow-hidden border-top border-secondary border-3"
+                      style={{
+                        backgroundColor: "rgba(15, 23, 42, 0.95)",
+                        borderRadius: "14px",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)"
+                      }}
+                    >
+                      <div
+                        className="p-3 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                        style={{ backgroundColor: "rgba(30, 41, 59, 0.5)" }}
+                      >
+                        <span className="text-secondary fw-semibold">LANE {i + 1}</span>
+                        <span className="text-secondary small fst-italic">Belum ada data</span>
+                      </div>
+                      <div className="px-3 pt-2 pb-1">
+                        <div className="fw-bold text-secondary fs-6 text-truncate">
+                          Belum ada penembak
+                        </div>
+                      </div>
+                      <div className="p-3 bg-black bg-opacity-25 mx-3 my-2 rounded-3 border border-secondary border-opacity-25">
+                        <div className="d-flex justify-content-between align-items-center text-secondary" style={{ fontSize: "0.74rem" }}>
+                          <span>Terdeteksi: - Butir</span>
+                          <span>Bullseye: -x</span>
+                        </div>
+                      </div>
+                      <div className="px-3 py-2 flex-grow-1 d-flex flex-column align-items-center justify-content-center">
+                        <div className="bg-black rounded-3 p-2 w-100 text-center shadow position-relative" style={{ minHeight: "220px" }}>
+                          <span className="text-secondary small fst-italic" style={{ fontSize: "0.68rem" }}>
+                            Target belum tersedia
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>*/
+                  <div
+                    key={`placeholder-${i}`}
+                    className="col"
+                  >
+                    <div
+                      className="card h-100 border-0 shadow-lg position-relative overflow-hidden border-top border-secondary border-3 opacity-50"
+                      style={{
+                        backgroundColor: "rgba(15, 23, 42, 0.95)",
+                        borderRadius: "14px",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.5)",
+                      }}
+                    >
+                      {/* Header Kartu Penembak */}
+                      <div
+                        className="p-3 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center"
+                        style={{ backgroundColor: "rgba(30, 41, 59, 0.5)" }}
+                      >
+                        {/* Jalur / Lane Badge */}
+                        <div className="d-flex align-items-center gap-2">
+                          <button
+                            className="btn fw-bold fs-6 shadow-sm btn-secondary text-dark"
+                          >
+                            LANE {i + displayedShooters.length + 1} &nbsp;&nbsp;
+                            <i className="bi bi-arrow-right"></i>
+                          </button>
+                        </div>
+                        <div className="d-flex justify-content-end align-items-center">
+                          <div className="px-2 bg-black bg-opacity-25 rounded-3 border border-secondary border-opacity-25">
+                            <div className="d-flex align-items-baseline gap-1">
+                              <span className="display-6 fw-bold text-seccondary lh-1 font-monospace">
+                                -
+                              </span>
+                              <span className="text-secondary fs-small">
+                                / -
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Informasi Identitas Penembak */}
+                      <div className="px-3 pt-2 pb-1">
+                        <div className="fw-bold text-secondary fs-6 text-truncate">
+                          Belum ada penembak
+                        </div>
+                      </div>
+
+                      {/* Score Bar Display (Skor Besar) */}
+                      <div className="p-3 bg-black bg-opacity-25 mx-3 my-2 rounded-3 border border-secondary border-opacity-25">
+
+                        {/* Info Tambahan: Butir & Bullseye */}
+                        <div
+                          className="d-flex justify-content-between align-items-center text-secondary"
+                          style={{ fontSize: "0.74rem" }}
+                        >
+                          <span>
+                            <i className="bi bi-circle-fill me-1 text-primary" style={{ fontSize: "0.5rem" }}></i>
+                            Terdeteksi:{" "}
+                            <strong className="text-light">
+                              - Butir
+                            </strong>
+                          </span>
+                          <span>
+                            <i className="bi bi-star-fill me-1 text-danger"></i>
+                            Bullseye:{" "}
+                            <strong className="text-danger">
+                              - x
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* TARGET VISUALIZER & ANOTASI FOTO */}
+                      <div className="px-3 py-2 flex-grow-1 d-flex flex-column align-items-center justify-content-center">
+                        {/* VIEW MODE: FOTO CV ONLY */}
+                        {viewMode === "foto" ? (
+                          <div
+                            className="bg-black rounded-3 p-2 w-100 text-center shadow-inner position-relative"
+                            style={{ minHeight: "220px" }}
+                          >
+                            <div className="d-flex flex-column align-items-center justify-content-center h-100 p-4 text-secondary">
+                              <i className="bi bi-camera-video-off fs-1 mb-2 opacity-50"></i>
+                              <span className="small">
+                                Belum ada foto deteksi kamera
+                              </span>
+                            </div>
+
+                            <div
+                              className="position-absolute bottom-0 start-50 translate-middle-x mb-2 badge bg-dark bg-opacity-75 text-white-50 border border-secondary border-opacity-25"
+                              style={{ fontSize: "0.68rem" }}
+                            >
+                              Foto Kamera OpenCV
+                            </div>
+                          </div>
+                        ) : viewMode === "split" ? (
+                          /* VIEW MODE: SPLIT (SVG + FOTO) */
+                          <div className="w-100">
+                            <div className="row g-2">
+                              {/* Lesan SVG */}
+                              <div className="col-6 text-center">
+                                <div
+                                  className="bg-black rounded-3 p-1 w-100 shadow"
+                                  style={{ maxHeight: "170px" }}
+                                >
+                                  <svg
+                                    viewBox="0 0 100 100"
+                                    className="w-100 h-auto"
+                                    style={{ maxHeight: "160px" }}
+                                  >
+                                    <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="1" />
+                                    <circle cx="50" cy="50" r="40" fill="#e9ecef" stroke="#212529" strokeWidth="1" />
+                                    <circle cx="50" cy="50" r="32" fill="#ced4da" stroke="#212529" strokeWidth="1" />
+                                    <circle cx="50" cy="50" r="24" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                                    <circle cx="50" cy="50" r="16" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                                    <circle cx="50" cy="50" r="8" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                                    <circle cx="50" cy="50" r="3" fill="#dc3545" stroke="#fff" strokeWidth="0.5" />
+                                    <line x1="50" y1="2" x2="50" y2="98" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+                                    <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+
+                                  </svg>
+                                  <small className="text-secondary d-block" style={{ fontSize: "0.65rem" }}>
+                                    Lesan Target
+                                  </small>
+                                </div>
+                              </div>
+
+                              {/* Foto Kamera */}
+                              <div className="col-6 text-center">
+                                <div
+                                  className="bg-black rounded-3 p-1 w-100 shadow d-flex align-items-center justify-content-center"
+                                  style={{ height: "170px" }}
+                                >
+                                  <span className="text-secondary small fst-italic" style={{ fontSize: "0.68rem" }}>
+                                    Foto belum ada
+                                  </span>
+
+                                </div>
+                                <small className="text-secondary d-block mt-1" style={{ fontSize: "0.65rem" }}>
+                                  Foto CV
+                                </small>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          /* VIEW MODE: SVG LESAN ONLY */
+                          <div
+                            className="bg-black rounded-3 p-2 w-100 text-center shadow position-relative"
+                            style={{ maxWidth: "260px" }}
+                          >
+                            <svg
+                              viewBox="0 0 100 100"
+                              className="w-100 h-auto"
+                              style={{ maxHeight: "220px" }}
+                            >
+                              <circle cx="50" cy="50" r="48" fill="#f8f9fa" stroke="#212529" strokeWidth="1" />
+                              <circle cx="50" cy="50" r="40" fill="#e9ecef" stroke="#212529" strokeWidth="1" />
+                              <circle cx="50" cy="50" r="32" fill="#ced4da" stroke="#212529" strokeWidth="1" />
+                              <circle cx="50" cy="50" r="24" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                              <circle cx="50" cy="50" r="16" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                              <circle cx="50" cy="50" r="8" fill="#212529" stroke="#fff" strokeWidth="0.8" />
+                              <circle cx="50" cy="50" r="3" fill="#dc3545" stroke="#fff" strokeWidth="0.5" />
+                              <line x1="50" y1="2" x2="50" y2="98" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+                              <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+
+                            </svg>
+
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </main>
