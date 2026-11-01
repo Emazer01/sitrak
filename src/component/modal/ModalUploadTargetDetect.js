@@ -333,9 +333,37 @@ export const ModalUploadTargetDetect = ({
   const [cameraError, setCameraError] = useState(null);
   const [overlayScale, setOverlayScale] = useState(1);
   const [showOverlay, setShowOverlay] = useState(true);
+  const [availableCameras, setAvailableCameras] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState("");
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+
+  // Label pembantu untuk daftar perangkat kamera
+  const getCameraLabel = (cam, idx) => {
+    if (cam && cam.label && cam.label.trim().length > 0) {
+      return cam.label;
+    }
+    return `Kamera ${idx + 1}`;
+  };
+
+  // Fungsi memperbarui daftar perangkat kamera yang tersedia di perangkat
+  const updateAvailableCameras = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      return [];
+    }
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
+      setAvailableCameras(videoDevices);
+      return videoDevices;
+    } catch (err) {
+      console.warn("Gagal mendapatkan daftar kamera:", err);
+      return [];
+    }
+  };
 
   // Fungsi menghentikan stream kamera & mematikan hardware
   const stopCamera = () => {
@@ -353,10 +381,18 @@ export const ModalUploadTargetDetect = ({
     setIsCameraActive(false);
   };
 
-  // Fungsi mengaktifkan kamera dengan dukungan WebRTC & fallback
-  const startCamera = async (facing = cameraFacing) => {
+  // Fungsi mengaktifkan kamera dengan dukungan WebRTC, pemilihan deviceId, & fallback
+  const startCamera = async (deviceId = selectedDeviceId, facing = cameraFacing) => {
     stopCamera();
     setCameraError(null);
+
+    let targetDeviceId = deviceId;
+    let targetFacing = facing;
+    // Kompatibilitas jika dipanggil dengan parameter facingMode langsung ('environment' / 'user')
+    if (deviceId === "environment" || deviceId === "user") {
+      targetFacing = deviceId;
+      targetDeviceId = selectedDeviceId;
+    }
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setCameraError(
@@ -367,25 +403,62 @@ export const ModalUploadTargetDetect = ({
 
     try {
       let stream = null;
+      const videoConstraints = {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      };
+
+      if (targetDeviceId) {
+        videoConstraints.deviceId = { exact: targetDeviceId };
+      } else if (targetFacing) {
+        videoConstraints.facingMode = targetFacing;
+      }
+
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: facing,
+          video: videoConstraints,
+          audio: false,
+        });
+      } catch (errExact) {
+        console.warn("Kamera exact constraint gagal, mencoba ideal/fallback:", errExact);
+        try {
+          const fallbackConstraints = {
             width: { ideal: 1920 },
             height: { ideal: 1080 },
-          },
-          audio: false,
-        });
-      } catch (errFacing) {
-        console.warn("Fallback to generic video constraints:", errFacing);
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+            ...(targetDeviceId
+              ? { deviceId: { ideal: targetDeviceId } }
+              : { facingMode: targetFacing }),
+          };
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: fallbackConstraints,
+            audio: false,
+          });
+        } catch (errFacing) {
+          console.warn("Fallback to generic video constraints:", errFacing);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
 
       streamRef.current = stream;
       setIsCameraActive(true);
+
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        const settings = track.getSettings ? track.getSettings() : {};
+        if (settings.deviceId) {
+          setSelectedDeviceId(settings.deviceId);
+        }
+        if (settings.facingMode) {
+          setCameraFacing(settings.facingMode);
+        }
+      }
+
+      // Perbarui daftar kamera setelah izin diberikan (agar nama/label kamera lengkap terisi)
+      await updateAvailableCameras();
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         try {
@@ -415,18 +488,47 @@ export const ModalUploadTargetDetect = ({
       ) {
         msg =
           "Kamera sedang digunakan oleh aplikasi lain. Tutup aplikasi tersebut dan coba lagi.";
+      } else if (err.name === "OverconstrainedError") {
+        msg =
+          "Kamera yang dipilih tidak dapat memenuhi konfigurasi resolusi atau perangkat.";
       }
       setCameraError(msg);
       setIsCameraActive(false);
     }
   };
 
-  // Toggle kamera depan dan belakang
-  const handleToggleFacing = () => {
-    const nextFacing = cameraFacing === "environment" ? "user" : "environment";
-    setCameraFacing(nextFacing);
+  // Mengganti kamera spesifik yang dipilih dari dropdown
+  const handleCameraChange = (newDeviceId) => {
+    setSelectedDeviceId(newDeviceId);
     if (isCameraActive) {
-      startCamera(nextFacing);
+      startCamera(newDeviceId, cameraFacing);
+    }
+  };
+
+  // Switch kamera (berpindah ke kamera berikutnya atau toggle facingMode)
+  const handleSwitchCamera = () => {
+    if (availableCameras.length > 1) {
+      const currentIndex = availableCameras.findIndex(
+        (c) => c.deviceId === selectedDeviceId
+      );
+      const nextIndex =
+        currentIndex >= 0
+          ? (currentIndex + 1) % availableCameras.length
+          : 0;
+      const nextCam = availableCameras[nextIndex];
+      if (nextCam) {
+        setSelectedDeviceId(nextCam.deviceId);
+        if (isCameraActive) {
+          startCamera(nextCam.deviceId, cameraFacing);
+        }
+      }
+    } else {
+      const nextFacing =
+        cameraFacing === "environment" ? "user" : "environment";
+      setCameraFacing(nextFacing);
+      if (isCameraActive) {
+        startCamera(null, nextFacing);
+      }
     }
   };
 
@@ -475,8 +577,11 @@ export const ModalUploadTargetDetect = ({
     setInputMode(mode);
     if (mode === "file") {
       stopCamera();
-    } else if (mode === "camera" && !previewUrl && !isCameraActive) {
-      startCamera(cameraFacing);
+    } else if (mode === "camera") {
+      updateAvailableCameras();
+      if (!previewUrl && !isCameraActive) {
+        startCamera(selectedDeviceId, cameraFacing);
+      }
     }
   };
 
@@ -496,10 +601,24 @@ export const ModalUploadTargetDetect = ({
     }
   }, [isCameraActive]);
 
-  // Cleanup kamera saat modal ditutup atau unmount
+  // Listener perubahan perangkat keras kamera (misal: pasang/cabut webcam USB)
+  useEffect(() => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.addEventListener) return;
+    const handleDeviceChange = () => {
+      updateAvailableCameras();
+    };
+    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+    };
+  }, []);
+
+  // Cleanup kamera dan pembaruan daftar kamera saat modal dibuka/ditutup
   useEffect(() => {
     if (!isOpen) {
       stopCamera();
+    } else {
+      updateAvailableCameras();
     }
   }, [isOpen]);
 
@@ -953,15 +1072,48 @@ export const ModalUploadTargetDetect = ({
 
                   {inputMode === "camera" && isCameraActive && (
                     <div className="d-flex align-items-center gap-1">
+                      {availableCameras.length > 1 && (
+                        <div className="d-flex align-items-center me-1">
+                          <select
+                            className="form-select form-select-sm py-0 pe-4 border-secondary border-opacity-50"
+                            style={{
+                              maxWidth: "200px",
+                              fontSize: "0.78rem",
+                              height: "28px",
+                              backgroundColor: "var(--bs-body-bg)",
+                              color: "var(--bs-body-color)",
+                            }}
+                            value={
+                              selectedDeviceId ||
+                              (availableCameras[0]?.deviceId || "")
+                            }
+                            onChange={(e) => handleCameraChange(e.target.value)}
+                            title="Pilih Kamera yang Digunakan"
+                          >
+                            {availableCameras.map((cam, idx) => (
+                              <option key={cam.deviceId || idx} value={cam.deviceId}>
+                                {getCameraLabel(cam, idx)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <button
                         type="button"
                         className="btn btn-sm btn-outline-secondary py-0 px-2"
-                        onClick={handleToggleFacing}
-                        title="Putar Kamera (Depan / Belakang)"
+                        onClick={handleSwitchCamera}
+                        title={
+                          availableCameras.length > 1
+                            ? "Ganti ke Kamera Berikutnya"
+                            : "Putar Kamera (Depan / Belakang)"
+                        }
+                        style={{ height: "28px" }}
                       >
                         <i className="bi bi-arrow-repeat me-1"></i>
                         <span className="small">
-                          {cameraFacing === "environment"
+                          {availableCameras.length > 1
+                            ? "Ganti Kamera"
+                            : cameraFacing === "environment"
                             ? "Kamera Belakang"
                             : "Kamera Depan"}
                         </span>
@@ -971,6 +1123,7 @@ export const ModalUploadTargetDetect = ({
                         className="btn btn-sm btn-outline-danger py-0 px-2"
                         onClick={stopCamera}
                         title="Matikan Kamera"
+                        style={{ height: "28px" }}
                       >
                         <i className="bi bi-camera-video-off me-1"></i>
                         <span className="small">Tutup</span>
@@ -1100,7 +1253,7 @@ export const ModalUploadTargetDetect = ({
                                 setSelectedFile(null);
                                 setPreviewUrl(null);
                                 setAnalysisResult(null);
-                                startCamera(cameraFacing);
+                                startCamera(selectedDeviceId, cameraFacing);
                               }}
                             >
                               <i className="bi bi-camera-fill me-1"></i> Ambil
@@ -1217,6 +1370,37 @@ export const ModalUploadTargetDetect = ({
 
                           {/* Tombol Shutter Ambil Foto & Opsi Overlay */}
                           <div className="d-flex align-items-center gap-2 ms-auto">
+                            {availableCameras.length > 1 && (
+                              <div className="d-none d-md-flex align-items-center me-1">
+                                <select
+                                  className="form-select form-select-sm py-0 bg-dark text-white border-secondary border-opacity-50"
+                                  style={{
+                                    maxWidth: "180px",
+                                    fontSize: "0.75rem",
+                                    height: "31px",
+                                  }}
+                                  value={
+                                    selectedDeviceId ||
+                                    (availableCameras[0]?.deviceId || "")
+                                  }
+                                  onChange={(e) =>
+                                    handleCameraChange(e.target.value)
+                                  }
+                                  title="Pilih Sumber Kamera"
+                                >
+                                  {availableCameras.map((cam, idx) => (
+                                    <option
+                                      key={cam.deviceId || idx}
+                                      value={cam.deviceId}
+                                      className="bg-dark text-white"
+                                    >
+                                      {getCameraLabel(cam, idx)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+
                             <button
                               type="button"
                               className={`btn btn-sm ${
@@ -1240,8 +1424,12 @@ export const ModalUploadTargetDetect = ({
                             <button
                               type="button"
                               className="btn btn-sm btn-outline-light"
-                              onClick={handleToggleFacing}
-                              title="Balik Kamera Depan / Belakang"
+                              onClick={handleSwitchCamera}
+                              title={
+                                availableCameras.length > 1
+                                  ? "Ganti ke Kamera Berikutnya"
+                                  : "Balik Kamera Depan / Belakang"
+                              }
                             >
                               <i className="bi bi-arrow-repeat"></i>
                             </button>
@@ -1295,10 +1483,35 @@ export const ModalUploadTargetDetect = ({
                           </>
                         )}
 
+                        {availableCameras.length > 1 && (
+                          <div
+                            className="mb-3 d-flex flex-column align-items-center"
+                            style={{ maxWidth: "320px", width: "100%" }}
+                          >
+                            <label className="small text-secondary mb-1 fw-semibold d-flex align-items-center gap-1">
+                              <i className="bi bi-camera-video text-primary"></i> Pilih Kamera:
+                            </label>
+                            <select
+                              className="form-select form-select-sm text-center"
+                              value={
+                                selectedDeviceId ||
+                                (availableCameras[0]?.deviceId || "")
+                              }
+                              onChange={(e) => setSelectedDeviceId(e.target.value)}
+                            >
+                              {availableCameras.map((cam, idx) => (
+                                <option key={cam.deviceId || idx} value={cam.deviceId}>
+                                  {getCameraLabel(cam, idx)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
                         <button
                           type="button"
                           className="btn btn-primary btn-sm px-4 shadow-sm fw-semibold d-flex align-items-center gap-2"
-                          onClick={() => startCamera(cameraFacing)}
+                          onClick={() => startCamera(selectedDeviceId, cameraFacing)}
                         >
                           <i className="bi bi-camera-video-fill"></i>
                           <span>
