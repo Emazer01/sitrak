@@ -3,12 +3,17 @@ import axios from "axios";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
 import { Breadcrumb } from "../component/Breadcrumb";
+import { getBackendUrl } from "../services/apiConfig";
 
 export const Pengaturan = () => {
   document.title = "Pengaturan Parameter - SITRAK-AI";
 
   const [activeTab, setActiveTab] = React.useState("personel");
   const [searchQuery, setSearchQuery] = React.useState("");
+
+  // State Feedback Notifikasi & Loading Penambahan
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [alertFeedback, setAlertFeedback] = React.useState(null);
 
   // State Pagination & Search Personel
   const [personelPage, setPersonelPage] = React.useState(1);
@@ -19,366 +24,139 @@ export const Pengaturan = () => {
   const [searchPersonel, setSearchPersonel] = React.useState("");
 
   // 1. State Master Personel
-  const [personelList, setPersonelList] = React.useState([
-    {
-      id: 1,
-      nrp: "219800112",
-      nama: "Lettu Inf. Pratama",
-      pangkat: "Lettu",
-      satuan: "Batalyon A",
-      regu: "Tim Alfa",
-    },
-    {
-      id: 2,
-      nrp: "219900234",
-      nama: "Serda Budi Santoso",
-      pangkat: "Serda",
-      satuan: "Batalyon B",
-      regu: "Tim Bravo",
-    },
-    {
-      id: 3,
-      nrp: "219900567",
-      nama: "Praka Dimas Setiawan",
-      pangkat: "Praka",
-      satuan: "Batalyon A",
-      regu: "Tim Alfa",
-    },
-    {
-      id: 4,
-      nrp: "220100889",
-      nama: "Sertu Agus Haryanto",
-      pangkat: "Sertu",
-      satuan: "Batalyon C",
-      regu: "Tim Charlie",
-    },
-    {
-      id: 5,
-      nrp: "220200101",
-      nama: "Koptu Hendra Gunawan",
-      pangkat: "Koptu",
-      satuan: "Batalyon A",
-      regu: "Tim Bravo",
-    },
-    {
-      id: 6,
-      nrp: "220300455",
-      nama: "Prada Ilham Maulana",
-      pangkat: "Prada",
-      satuan: "Batalyon B",
-      regu: "Tim Alfa",
-    },
-  ]);
+  const [personelList, setPersonelList] = React.useState([]);
   const [newPersonel, setNewPersonel] = React.useState({
     nrp: "",
     nama: "",
-    pangkat: "Prada",
     satuan: "",
-    regu: "",
   });
 
   // 2. State Master Senjata
-  const [senjataList, setSenjataList] = React.useState([
-    {
-      id: 1,
-      kode: "WPN-SS2-01",
-      model: "Pindad SS2-V4",
-      jenis: "Senapan Serbu",
-      pabrikan: "PT Pindad",
-    },
-    {
-      id: 2,
-      kode: "WPN-G2C-02",
-      model: "Pindad G2 Combat",
-      jenis: "Pistol",
-      pabrikan: "PT Pindad",
-    },
-    {
-      id: 3,
-      kode: "WPN-G2E-03",
-      model: "Pindad G2 Elite",
-      jenis: "Pistol",
-      pabrikan: "PT Pindad",
-    },
-    {
-      id: 4,
-      kode: "WPN-MP5-04",
-      model: "H&K MP5",
-      jenis: "Submachine Gun",
-      pabrikan: "Heckler & Koch",
-    },
-    {
-      id: 5,
-      kode: "WPN-SPR-05",
-      model: "Pindad SPR-3",
-      jenis: "Sniper / SPR",
-      pabrikan: "PT Pindad",
-    },
-  ]);
+  const [senjataList, setSenjataList] = React.useState([]);
   const [newSenjata, setNewSenjata] = React.useState({
-    kode: "",
     model: "",
-    jenis: "Senapan Serbu",
+    jenis: "",
+    kaliber: "9 x 19 mm",
     pabrikan: "PT Pindad",
   });
 
   // 3. State Master Jenis Senjata
-  const [jenisSenjataList, setJenisSenjataList] = React.useState([
-    {
-      id: 1,
-      nama: "Senapan Serbu",
-      keterangan: "Senjata laras panjang otomatis / semi otomatis perorangan",
-    },
-    {
-      id: 2,
-      nama: "Pistol",
-      keterangan: "Senjata laras pendek genggam jarak dekat",
-    },
-    {
-      id: 3,
-      nama: "Submachine Gun",
-      keterangan: "Senjata otomatis kaliber pistol untuk jarak dekat - sedang",
-    },
-    {
-      id: 4,
-      nama: "Sniper / SPR",
-      keterangan: "Senapan penembak runduk presisi tinggi jarak jauh",
-    },
-    {
-      id: 5,
-      nama: "Shotgun",
-      keterangan:
-        "Senjata laras licin peluru sebar untuk taktis pertempuran jarak dekat",
-    },
-  ]);
+  const [jenisSenjataList, setJenisSenjataList] = React.useState([]);
   const [newJenisSenjata, setNewJenisSenjata] = React.useState({
     nama: "",
-    keterangan: "",
   });
 
   // 4. State Master Tipe Target / Sasaran
-  const [targetList, setTargetList] = React.useState([
-    {
-      id: 1,
-      nama: "Bullseye",
-      bentuk: "Lingkaran Konsentris",
-      ring: 10,
-      skorMax: 100,
-      keterangan: "Target standar tembak presisi 10 cincin konsentris",
-    },
-    {
-      id: 2,
-      nama: "Siluet L1",
-      bentuk: "Siluet Tubuh Lengkap",
-      ring: 5,
-      skorMax: 100,
-      keterangan: "Target siluet badan standar penilaian militer",
-    },
-    {
-      id: 3,
-      nama: "Siluet Setengah Badan",
-      bentuk: "Siluet Tubuh Atas",
-      ring: 5,
-      skorMax: 100,
-      keterangan: "Target tembak taktis reaksi separuh badan",
-    },
-    {
-      id: 4,
-      nama: "Plat Baja / Popper",
-      bentuk: "Plat Logam Reaksi",
-      ring: 1,
-      skorMax: 10,
-      keterangan: "Target reaktif jatuh seketika saat terkena tembakan",
-    },
-    {
-      id: 5,
-      nama: "Custom",
-      bentuk: "Kustom / Khusus",
-      ring: 10,
-      skorMax: 100,
-      keterangan: "Target sasaran latihan dengan zona perkenaan khusus",
-    },
-  ]);
+  const [targetList, setTargetList] = React.useState([]);
   const [newTarget, setNewTarget] = React.useState({
     nama: "",
-    bentuk: "Lingkaran Konsentris",
-    ring: 10,
-    skorMax: 100,
-    keterangan: "",
   });
 
   // 5. State Master Mode Tembakan
-  const [modeList, setModeList] = React.useState([
-    {
-      id: 1,
-      nama: "Presisi",
-      ritme: "Slow Fire",
-      deskripsi: "Tembakan fokus ketepatan bidik dengan waktu tembak longgar",
-    },
-    {
-      id: 2,
-      nama: "Reaksi",
-      ritme: "Rapid Fire",
-      deskripsi:
-        "Tembakan kecepatan respon perkenaan sasaran dalam batasan waktu singkat",
-    },
-    {
-      id: 3,
-      nama: "Double Tap",
-      ritme: "2 Tembakan Beruntun",
-      deskripsi:
-        "Dua tembakan cepat berturut-turut pada satu sasaran yang sama",
-    },
-    {
-      id: 4,
-      nama: "Penilaian",
-      ritme: "Ujian Standar",
-      deskripsi: "Sesi penilaian kualifikasi berkala personel militer",
-    },
-  ]);
+  const [modeList, setModeList] = React.useState([]);
   const [newMode, setNewMode] = React.useState({
     nama: "",
-    ritme: "Slow Fire",
-    deskripsi: "",
   });
 
   // 6. State Master Sikap Menembak
-  const [sikapList, setSikapList] = React.useState([
-    {
-      id: 1,
-      nama: "Berdiri",
-      kode: "Standing",
-      deskripsi: "Posisi berdiri tegak bertumpu pada kedua kaki",
-    },
-    {
-      id: 2,
-      nama: "Berlutut",
-      kode: "Kneeling",
-      deskripsi: "Posisi berlutut dengan satu lutut menumpu tanah",
-    },
-    {
-      id: 3,
-      nama: "Tiarap",
-      kode: "Prone",
-      deskripsi:
-        "Posisi tubuh merebah tengkurap, paling stabil untuk tembak jauh",
-    },
-    {
-      id: 4,
-      deskripsi:
-        "Kombinasi bergantian antara sikap tiarap, berlutut, dan berdiri",
-      nama: "Kombinasi",
-      kode: "3 Sikap",
-    },
-  ]);
+  const [sikapList, setSikapList] = React.useState([]);
   const [newSikap, setNewSikap] = React.useState({
     nama: "",
-    kode: "",
-    deskripsi: "",
   });
-
-  // Fungsi memanggil API /atribut dengan metode GET (tanpa personel)
+  // Fungsi memanggil API /atribut dengan metode GET
   const getAtribut = async () => {
-    var atribut = {};
-    await axios
-      .get(`${process.env.REACT_APP_BACKEND_URL}/atribut`, {
+    try {
+      const response = await axios.get(`${getBackendUrl()}/atribut`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("access_token")}`,
         },
-      })
-      .then(function (response) {
-        if (response.status === 200) {
-          atribut = response.data;
-          // Update state berdasarkan data atribut yang didapat (jenis_senjata, mode_tembakan, sikap_menembak, tipe_target, senjata)
-          if (atribut.jenis_senjata && Array.isArray(atribut.jenis_senjata)) {
-            setJenisSenjataList(atribut.jenis_senjata);
-          }
-          if (atribut.mode_tembakan && Array.isArray(atribut.mode_tembakan)) {
-            setModeList(atribut.mode_tembakan);
-          }
-          if (atribut.sikap_menembak && Array.isArray(atribut.sikap_menembak)) {
-            setSikapList(atribut.sikap_menembak);
-          }
-          if (atribut.tipe_target && Array.isArray(atribut.tipe_target)) {
-            setTargetList(atribut.tipe_target);
-          }
-          if (atribut.senjata && Array.isArray(atribut.senjata)) {
-            setSenjataList(atribut.senjata);
-          }
-        }
-      })
-      .catch(function (error) {
-        console.error("Error GET /atribut:", error);
       });
-    return atribut;
+
+      if (response.status === 200) {
+        const atribut = response.data;
+        if (atribut.jenis_senjata && Array.isArray(atribut.jenis_senjata)) {
+          setJenisSenjataList(atribut.jenis_senjata);
+          setNewSenjata((prev) => ({
+            ...prev,
+            jenis: prev.jenis || (atribut.jenis_senjata[0]?.id_jenis_senjata ?? ""),
+          }));
+        }
+        if (atribut.mode_tembakan && Array.isArray(atribut.mode_tembakan)) {
+          setModeList(atribut.mode_tembakan);
+        }
+        if (atribut.sikap_menembak && Array.isArray(atribut.sikap_menembak)) {
+          setSikapList(atribut.sikap_menembak);
+        }
+        if (atribut.tipe_target && Array.isArray(atribut.tipe_target)) {
+          setTargetList(atribut.tipe_target);
+        }
+        if (atribut.senjata && Array.isArray(atribut.senjata)) {
+          setSenjataList(atribut.senjata);
+        }
+        return atribut;
+      }
+    } catch (error) {
+      console.error("Error GET /atribut:", error);
+    }
+    return {};
   };
 
   // Fungsi memanggil API /personel dengan metode GET, pagination, dan filter pencarian
-  // Contoh pemanggilan:
-  // - Halaman 1 (10 data pertama): GET /personel?page=1&limit=10
-  // - Halaman 2 (10 data berikutnya): GET /personel?page=2&limit=10
-  // - Pencarian Nama/NRP: GET /personel?page=1&limit=10&search=budi
   const getPersonel = async (page = 1, limit = 10, search = "") => {
     setPersonelLoading(true);
     var personelData = [];
     try {
-      let url = `${process.env.REACT_APP_BACKEND_URL}/personel?page=${page}&limit=${limit}`;
+      let url = `${getBackendUrl()}/personel?page=${page}&limit=${limit}`;
       if (search && search.trim() !== "") {
         url += `&search=${encodeURIComponent(search.trim())}`;
       }
 
-      await axios
-        .get(url, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
-          },
-        })
-        .then(function (response) {
-          if (response.status === 200) {
-            const resData = response.data;
-            personelData = resData;
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
 
-            // Mendukung berbagai bentuk response (array langsung, atau paginated wrapper { data: [...], total: ... })
-            if (Array.isArray(resData)) {
-              setPersonelList(resData);
-              setPersonelTotal((prev) => Math.max(prev, resData.length));
-              setPersonelTotalPages(resData.length >= limit ? page + 1 : page);
-            } else if (resData && Array.isArray(resData.data)) {
-              setPersonelList(resData.data);
-              const total =
-                resData.total !== undefined
-                  ? resData.total
-                  : resData.count !== undefined
-                  ? resData.count
-                  : resData.data.length;
-              setPersonelTotal(total);
-              const totalPages =
-                resData.totalPages ||
-                resData.total_pages ||
-                Math.ceil(total / limit) ||
-                1;
-              setPersonelTotalPages(totalPages);
-            } else if (resData && Array.isArray(resData.personel)) {
-              setPersonelList(resData.personel);
-              const total =
-                resData.total !== undefined
-                  ? resData.total
-                  : resData.personel.length;
-              setPersonelTotal(total);
-              const totalPages =
-                resData.totalPages ||
-                resData.total_pages ||
-                Math.ceil(total / limit) ||
-                1;
-              setPersonelTotalPages(totalPages);
-            }
-          }
-        })
-        .catch(function (error) {
-          console.error("Error GET /personel:", error);
-        });
+      if (response.status === 200) {
+        const resData = response.data;
+        personelData = resData;
+
+        if (Array.isArray(resData)) {
+          setPersonelList(resData);
+          setPersonelTotal((prev) => Math.max(prev, resData.length));
+          setPersonelTotalPages(resData.length >= limit ? page + 1 : page);
+        } else if (resData && Array.isArray(resData.data)) {
+          setPersonelList(resData.data);
+          const total =
+            resData.total !== undefined
+              ? resData.total
+              : resData.count !== undefined
+              ? resData.count
+              : resData.data.length;
+          setPersonelTotal(total);
+          const totalPages =
+            resData.totalPages ||
+            resData.total_pages ||
+            Math.ceil(total / limit) ||
+            1;
+          setPersonelTotalPages(totalPages);
+        } else if (resData && Array.isArray(resData.personel)) {
+          setPersonelList(resData.personel);
+          const total =
+            resData.total !== undefined
+              ? resData.total
+              : resData.personel.length;
+          setPersonelTotal(total);
+          const totalPages =
+            resData.totalPages ||
+            resData.total_pages ||
+            Math.ceil(total / limit) ||
+            1;
+          setPersonelTotalPages(totalPages);
+        }
+      }
     } catch (error) {
-      console.error("Error getPersonel:", error);
+      console.error("Error GET /personel:", error);
     } finally {
       setPersonelLoading(false);
     }
@@ -414,75 +192,471 @@ export const Pengaturan = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [personelPage, searchPersonel, personelLimit]);
 
-  // Handlers Tambah Data
-  const handleAddPersonel = (e) => {
+  // ========================================================
+  // HANDLERS TAMBAH & HAPUS MASTER DATA VIA API BACKEND
+  // ========================================================
+
+  // 1. Personel
+  const handleAddPersonel = async (e) => {
     e.preventDefault();
     if (!newPersonel.nrp || !newPersonel.nama) return;
-    setPersonelList([
-      {
-        id: Date.now(),
-        nrp: newPersonel.nrp,
-        nama_personel_penembak: newPersonel.nama,
-        nama: newPersonel.nama,
-        satuan: newPersonel.satuan || "",
-      },
-      ...personelList,
-    ]);
-    setPersonelTotal((prev) => prev + 1);
-    setNewPersonel({
-      nrp: "",
-      nama: "",
-      satuan: "",
-    });
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const payload = {
+        nrp: newPersonel.nrp.trim(),
+        nama_personel_penembak: newPersonel.nama.trim(),
+        satuan: (newPersonel.satuan || "").trim() || "-",
+      };
+
+      const response = await axios.post(`${getBackendUrl()}/personel`, payload, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Personel "${newPersonel.nama}" berhasil disimpan ke database.`,
+        });
+        setNewPersonel({
+          nrp: "",
+          nama: "",
+          satuan: "",
+        });
+        getPersonel(personelPage, personelLimit, searchPersonel);
+      }
+    } catch (error) {
+      console.error("Error handleAddPersonel:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan data personel ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddSenjata = (e) => {
+  const handleDeletePersonel = async (id, nama) => {
+    if (!window.confirm(`Yakin ingin menghapus personel "${nama || id}" dari database?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(`${getBackendUrl()}/personel/${id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Personel "${nama || id}" berhasil dihapus dari database.`,
+        });
+        getPersonel(personelPage, personelLimit, searchPersonel);
+      }
+    } catch (error) {
+      console.error("Error handleDeletePersonel:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus personel dari database.",
+      });
+    }
+  };
+
+  // 2. Senjata
+  const handleAddSenjata = async (e) => {
     e.preventDefault();
-    if (!newSenjata.kode || !newSenjata.model) return;
-    setSenjataList([...senjataList, { ...newSenjata, id: Date.now() }]);
-    setNewSenjata({
-      kode: "",
-      model: "",
-      jenis: "Senapan Serbu",
-      pabrikan: "PT Pindad",
-    });
+    if (!newSenjata.model) return;
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const defaultJenis = jenisSenjataList[0]?.id_jenis_senjata || 1;
+      const payload = {
+        model_senjata: newSenjata.model.trim(),
+        id_jenis_senjata: parseInt(newSenjata.jenis) || defaultJenis,
+        kaliber: (newSenjata.kaliber || "9 x 19 mm").trim(),
+        pabrikan: (newSenjata.pabrikan || "PT Pindad").trim(),
+      };
+
+      const response = await axios.post(`${getBackendUrl()}/senjata`, payload, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Senjata "${newSenjata.model}" berhasil disimpan ke database.`,
+        });
+        setNewSenjata({
+          model: "",
+          jenis: jenisSenjataList[0]?.id_jenis_senjata || "",
+          kaliber: "9 x 19 mm",
+          pabrikan: "PT Pindad",
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleAddSenjata:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan data senjata ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddJenisSenjata = (e) => {
+  const handleDeleteSenjata = async (id, model) => {
+    if (!window.confirm(`Yakin ingin menghapus senjata "${model || id}" dari database?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(`${getBackendUrl()}/senjata/${id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Senjata "${model || id}" berhasil dihapus dari database.`,
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleDeleteSenjata:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus senjata. Senjata mungkin sedang dipakai pada riwayat sesi latihan.",
+      });
+    }
+  };
+
+  // 3. Jenis Senjata
+  const handleAddJenisSenjata = async (e) => {
     e.preventDefault();
     if (!newJenisSenjata.nama) return;
-    setJenisSenjataList([
-      ...jenisSenjataList,
-      { ...newJenisSenjata, id: Date.now() },
-    ]);
-    setNewJenisSenjata({ nama: "", keterangan: "" });
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const payload = {
+        nama_jenis_senjata: newJenisSenjata.nama.trim(),
+      };
+
+      const response = await axios.post(
+        `${getBackendUrl()}/jenis-senjata`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Kategori jenis senjata "${newJenisSenjata.nama}" berhasil disimpan ke database.`,
+        });
+        setNewJenisSenjata({ nama: "" });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleAddJenisSenjata:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan kategori jenis senjata ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddTarget = (e) => {
+  const handleDeleteJenisSenjata = async (id, nama) => {
+    if (!window.confirm(`Yakin ingin menghapus jenis senjata "${nama || id}"?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(
+        `${getBackendUrl()}/jenis-senjata/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Jenis senjata "${nama || id}" berhasil dihapus dari database.`,
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleDeleteJenisSenjata:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus jenis senjata. Masih ada senjata yang terhubung ke jenis ini.",
+      });
+    }
+  };
+
+  // 4. Tipe Target / Sasaran
+  const handleAddTarget = async (e) => {
     e.preventDefault();
     if (!newTarget.nama) return;
-    setTargetList([...targetList, { ...newTarget, id: Date.now() }]);
-    setNewTarget({
-      nama: "",
-      bentuk: "Lingkaran Konsentris",
-      ring: 10,
-      skorMax: 100,
-      keterangan: "",
-    });
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const payload = {
+        nama_tipe_target: newTarget.nama.trim(),
+      };
+
+      const response = await axios.post(
+        `${getBackendUrl()}/tipe-target`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Tipe target "${newTarget.nama}" berhasil disimpan ke database.`,
+        });
+        setNewTarget({ nama: "" });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleAddTarget:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan tipe target ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddMode = (e) => {
+  const handleDeleteTarget = async (id, nama) => {
+    if (!window.confirm(`Yakin ingin menghapus tipe target "${nama || id}"?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(
+        `${getBackendUrl()}/tipe-target/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Tipe target "${nama || id}" berhasil dihapus dari database.`,
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleDeleteTarget:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus tipe target. Target mungkin sedang dipakai pada riwayat latihan.",
+      });
+    }
+  };
+
+  // 5. Mode Tembakan
+  const handleAddMode = async (e) => {
     e.preventDefault();
     if (!newMode.nama) return;
-    setModeList([...modeList, { ...newMode, id: Date.now() }]);
-    setNewMode({ nama: "", ritme: "Slow Fire", deskripsi: "" });
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const payload = {
+        nama_mode_tembakan: newMode.nama.trim(),
+      };
+
+      const response = await axios.post(
+        `${getBackendUrl()}/mode-tembakan`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Mode tembakan "${newMode.nama}" berhasil disimpan ke database.`,
+        });
+        setNewMode({ nama: "" });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleAddMode:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan mode tembakan ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAddSikap = (e) => {
+  const handleDeleteMode = async (id, nama) => {
+    if (!window.confirm(`Yakin ingin menghapus mode tembakan "${nama || id}"?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(
+        `${getBackendUrl()}/mode-tembakan/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Mode tembakan "${nama || id}" berhasil dihapus dari database.`,
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleDeleteMode:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus mode tembakan.",
+      });
+    }
+  };
+
+  // 6. Sikap Menembak
+  const handleAddSikap = async (e) => {
     e.preventDefault();
     if (!newSikap.nama) return;
-    setSikapList([...sikapList, { ...newSikap, id: Date.now() }]);
-    setNewSikap({ nama: "", kode: "", deskripsi: "" });
+
+    setIsSubmitting(true);
+    setAlertFeedback(null);
+    try {
+      const payload = {
+        nama_sikap_menembak: newSikap.nama.trim(),
+      };
+
+      const response = await axios.post(
+        `${getBackendUrl()}/sikap-menembak`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+
+      if (response.status === 201 || response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Sikap menembak "${newSikap.nama}" berhasil disimpan ke database.`,
+        });
+        setNewSikap({ nama: "" });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleAddSikap:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menyimpan sikap menembak ke backend/database.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteSikap = async (id, nama) => {
+    if (!window.confirm(`Yakin ingin menghapus sikap menembak "${nama || id}"?`)) {
+      return;
+    }
+    setAlertFeedback(null);
+    try {
+      const response = await axios.delete(
+        `${getBackendUrl()}/sikap-menembak/${id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
+      if (response.status === 200) {
+        setAlertFeedback({
+          type: "success",
+          message: `Sikap menembak "${nama || id}" berhasil dihapus dari database.`,
+        });
+        getAtribut();
+      }
+    } catch (error) {
+      console.error("Error handleDeleteSikap:", error);
+      setAlertFeedback({
+        type: "danger",
+        message:
+          error.response?.data?.message ||
+          (typeof error.response?.data === "string" ? error.response.data : "") ||
+          "Gagal menghapus sikap menembak.",
+      });
+    }
   };
 
   return (
@@ -651,6 +825,29 @@ export const Pengaturan = () => {
               </div>
             </div>
 
+            {/* Alert Notifikasi Status Aksi Backend */}
+            {alertFeedback && (
+              <div
+                className={`alert alert-${alertFeedback.type} alert-dismissible fade show d-flex align-items-center mb-4 shadow-sm`}
+                role="alert"
+              >
+                <i
+                  className={`bi ${
+                    alertFeedback.type === "success"
+                      ? "bi-check-circle-fill text-success"
+                      : "bi-exclamation-triangle-fill text-danger"
+                  } fs-5 me-2`}
+                ></i>
+                <div className="flex-grow-1">{alertFeedback.message}</div>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setAlertFeedback(null)}
+                  aria-label="Close"
+                ></button>
+              </div>
+            )}
+
             {/* ======================================================== */}
             {/* TAB 1: DATA PERSONEL */}
             {/* ======================================================== */}
@@ -715,7 +912,7 @@ export const Pengaturan = () => {
                                     className="spinner-border spinner-border-sm text-primary me-2"
                                     role="status"
                                   ></div>
-                                  Memuat data personel...
+                                  Memuat data personel dari database...
                                 </td>
                               </tr>
                             ) : personelList.length === 0 ? (
@@ -743,15 +940,12 @@ export const Pengaturan = () => {
                                       type="button"
                                       className="btn btn-sm btn-link text-danger p-0"
                                       onClick={() =>
-                                        setPersonelList(
-                                          personelList.filter(
-                                            (x) =>
-                                              (x.id_personel_penembak || x.id) !==
-                                              (p.id_personel_penembak || p.id)
-                                          )
+                                        handleDeletePersonel(
+                                          p.id_personel_penembak || p.id,
+                                          p.nama_personel_penembak || p.nama
                                         )
                                       }
-                                      title="Hapus Personel"
+                                      title="Hapus Personel dari Database"
                                     >
                                       <i className="bi bi-trash"></i>
                                     </button>
@@ -932,7 +1126,7 @@ export const Pengaturan = () => {
                             required
                           />
                         </div>
-                        <div className="mb-2">
+                        <div className="mb-3">
                           <label className="form-label small fw-semibold">
                             Satuan
                           </label>
@@ -953,8 +1147,22 @@ export const Pengaturan = () => {
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Personel
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Personel
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
@@ -996,39 +1204,64 @@ export const Pengaturan = () => {
                               <th>#</th>
                               <th>Model Senjata</th>
                               <th>Jenis Senjata</th>
+                              <th>Kaliber</th>
                               <th>Pabrikan</th>
                               <th className="text-center">Aksi</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {senjataList.map((s,idx) => (
-                                <tr key={s.id}>
-                                  <td className="fw-bold text-secondary">{idx + 1}</td>
-                                  <td className="fw-semibold">{s.model_senjata}</td>
-                                  <td>
-                                    <span className="badge bg-secondary-subtle text-secondary border">
-                                      {s.nama_jenis_senjata}
-                                    </span>
-                                  </td>
-                                  <td>{s.pabrikan}</td>
-                                  <td className="text-center">
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-link text-danger p-0"
-                                      onClick={() =>
-                                        setSenjataList(
-                                          senjataList.filter(
-                                            (x) => x.id !== s.id,
-                                          ),
-                                        )
-                                      }
-                                      title="Hapus Senjata"
-                                    >
-                                      <i className="bi bi-trash"></i>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                            {senjataList.length === 0 ? (
+                              <tr>
+                                <td colSpan="6" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-4 d-block mb-1"></i>
+                                  Tidak ada data senjata ditemukan
+                                </td>
+                              </tr>
+                            ) : (
+                              senjataList
+                                .filter((s) => {
+                                  if (!searchQuery.trim()) return true;
+                                  const q = searchQuery.toLowerCase();
+                                  return (
+                                    (s.model_senjata || s.model || "").toLowerCase().includes(q) ||
+                                    (s.nama_jenis_senjata || "").toLowerCase().includes(q) ||
+                                    (s.kaliber || "").toLowerCase().includes(q) ||
+                                    (s.pabrikan || "").toLowerCase().includes(q)
+                                  );
+                                })
+                                .map((s, idx) => (
+                                  <tr key={s.id_senjata || s.id || idx}>
+                                    <td className="fw-bold text-secondary">{idx + 1}</td>
+                                    <td className="fw-semibold">{s.model_senjata || s.model}</td>
+                                    <td>
+                                      <span className="badge bg-secondary-subtle text-secondary border">
+                                        {s.nama_jenis_senjata || "-"}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className="badge bg-body-tertiary text-dark border">
+                                        {s.kaliber || "-"}
+                                      </span>
+                                    </td>
+                                    <td>{s.pabrikan || "-"}</td>
+                                    <td className="text-center">
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-link text-danger p-0"
+                                        onClick={() =>
+                                          handleDeleteSenjata(
+                                            s.id_senjata || s.id,
+                                            s.model_senjata || s.model
+                                          )
+                                        }
+                                        title="Hapus Senjata dari Database"
+                                      >
+                                        <i className="bi bi-trash"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1069,7 +1302,7 @@ export const Pengaturan = () => {
                           </label>
                           <select
                             className="form-select form-select-sm"
-                            value={newSenjata.jenis}
+                            value={newSenjata.jenis || (jenisSenjataList[0]?.id_jenis_senjata ?? "")}
                             onChange={(e) =>
                               setNewSenjata({
                                 ...newSenjata,
@@ -1078,11 +1311,29 @@ export const Pengaturan = () => {
                             }
                           >
                             {jenisSenjataList.map((j) => (
-                              <option key={j.id} value={j.id_jenis_senjata}>
-                                {j.nama_jenis_senjata}
+                              <option key={j.id_jenis_senjata || j.id} value={j.id_jenis_senjata || j.id}>
+                                {j.nama_jenis_senjata || j.nama}
                               </option>
                             ))}
                           </select>
+                        </div>
+                        <div className="mb-2">
+                          <label className="form-label small fw-semibold">
+                            Kaliber
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            placeholder="Contoh: 9 x 19 mm / 5.56 x 45 mm"
+                            value={newSenjata.kaliber}
+                            onChange={(e) =>
+                              setNewSenjata({
+                                ...newSenjata,
+                                kaliber: e.target.value,
+                              })
+                            }
+                            required
+                          />
                         </div>
                         <div className="mb-3">
                           <label className="form-label small fw-semibold">
@@ -1104,8 +1355,22 @@ export const Pengaturan = () => {
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Senjata
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Senjata
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
@@ -1138,28 +1403,36 @@ export const Pengaturan = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {jenisSenjataList.map((j, idx) => (
-                              <tr key={j.id}>
-                                <td className="text-secondary">{idx + 1}</td>
-                                <td className="fw-bold">{j.nama_jenis_senjata}</td>
-                                <td className="text-center">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-link text-danger p-0"
-                                    onClick={() =>
-                                      setJenisSenjataList(
-                                        jenisSenjataList.filter(
-                                          (x) => x.id !== j.id,
-                                        ),
-                                      )
-                                    }
-                                    title="Hapus"
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
+                            {jenisSenjataList.length === 0 ? (
+                              <tr>
+                                <td colSpan="3" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-4 d-block mb-1"></i>
+                                  Tidak ada data jenis senjata ditemukan
                                 </td>
                               </tr>
-                            ))}
+                            ) : (
+                              jenisSenjataList.map((j, idx) => (
+                                <tr key={j.id_jenis_senjata || j.id || idx}>
+                                  <td className="text-secondary">{idx + 1}</td>
+                                  <td className="fw-bold">{j.nama_jenis_senjata || j.nama}</td>
+                                  <td className="text-center">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-link text-danger p-0"
+                                      onClick={() =>
+                                        handleDeleteJenisSenjata(
+                                          j.id_jenis_senjata || j.id,
+                                          j.nama_jenis_senjata || j.nama
+                                        )
+                                      }
+                                      title="Hapus Jenis Senjata dari Database"
+                                    >
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1176,7 +1449,7 @@ export const Pengaturan = () => {
                     </div>
                     <div className="card-body p-3">
                       <form onSubmit={handleAddJenisSenjata}>
-                        <div className="mb-2">
+                        <div className="mb-3">
                           <label className="form-label small fw-semibold">
                             Nama Jenis Senjata
                           </label>
@@ -1194,13 +1467,25 @@ export const Pengaturan = () => {
                             required
                           />
                         </div>
-                        
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Jenis
-                          Senjata
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Jenis Senjata
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
@@ -1233,27 +1518,36 @@ export const Pengaturan = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {targetList.map((t, idx) => (
-                              <tr key={t.id}>
-                                <td className="text-secondary">{idx + 1}</td>
-                                <td className="fw-bold">{t.nama_tipe_target}</td>
-                                
-                                <td className="text-center">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-link text-danger p-0"
-                                    onClick={() =>
-                                      setTargetList(
-                                        targetList.filter((x) => x.id !== t.id),
-                                      )
-                                    }
-                                    title="Hapus"
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
+                            {targetList.length === 0 ? (
+                              <tr>
+                                <td colSpan="3" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-4 d-block mb-1"></i>
+                                  Tidak ada data tipe target ditemukan
                                 </td>
                               </tr>
-                            ))}
+                            ) : (
+                              targetList.map((t, idx) => (
+                                <tr key={t.id_tipe_target || t.id || idx}>
+                                  <td className="text-secondary">{idx + 1}</td>
+                                  <td className="fw-bold">{t.nama_tipe_target || t.nama}</td>
+                                  <td className="text-center">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-link text-danger p-0"
+                                      onClick={() =>
+                                        handleDeleteTarget(
+                                          t.id_tipe_target || t.id,
+                                          t.nama_tipe_target || t.nama
+                                        )
+                                      }
+                                      title="Hapus Tipe Target dari Database"
+                                    >
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1270,7 +1564,7 @@ export const Pengaturan = () => {
                     </div>
                     <div className="card-body p-3">
                       <form onSubmit={handleAddTarget}>
-                        <div className="mb-2">
+                        <div className="mb-3">
                           <label className="form-label small fw-semibold">
                             Nama Target
                           </label>
@@ -1291,9 +1585,22 @@ export const Pengaturan = () => {
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Tipe
-                          Target
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Tipe Target
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
@@ -1326,27 +1633,36 @@ export const Pengaturan = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {modeList.map((m,idx) => (
-                              <tr key={m.id}>
-                                <td className="text-secondary">{idx + 1}</td>
-                                <td className="fw-bold">{m.nama_mode_tembakan}</td>
-                                
-                                <td className="text-center">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-link text-danger p-0"
-                                    onClick={() =>
-                                      setModeList(
-                                        modeList.filter((x) => x.id !== m.id),
-                                      )
-                                    }
-                                    title="Hapus"
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
+                            {modeList.length === 0 ? (
+                              <tr>
+                                <td colSpan="3" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-4 d-block mb-1"></i>
+                                  Tidak ada data mode tembakan ditemukan
                                 </td>
                               </tr>
-                            ))}
+                            ) : (
+                              modeList.map((m, idx) => (
+                                <tr key={m.id_mode_tembakan || m.id || idx}>
+                                  <td className="text-secondary">{idx + 1}</td>
+                                  <td className="fw-bold">{m.nama_mode_tembakan || m.nama}</td>
+                                  <td className="text-center">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-link text-danger p-0"
+                                      onClick={() =>
+                                        handleDeleteMode(
+                                          m.id_mode_tembakan || m.id,
+                                          m.nama_mode_tembakan || m.nama
+                                        )
+                                      }
+                                      title="Hapus Mode Tembakan dari Database"
+                                    >
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1363,7 +1679,7 @@ export const Pengaturan = () => {
                     </div>
                     <div className="card-body p-3">
                       <form onSubmit={handleAddMode}>
-                        <div className="mb-2">
+                        <div className="mb-3">
                           <label className="form-label small fw-semibold">
                             Nama Mode
                           </label>
@@ -1381,9 +1697,22 @@ export const Pengaturan = () => {
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Mode
-                          Tembakan
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Mode Tembakan
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
@@ -1416,27 +1745,36 @@ export const Pengaturan = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {sikapList.map((s,idx) => (
-                              <tr key={s.id}>
-                                <td className="text-secondary">{idx + 1}</td>
-                                <td className="fw-bold">{s.nama_sikap_menembak}</td>
-                                
-                                <td className="text-center">
-                                  <button
-                                    type="button"
-                                    className="btn btn-sm btn-link text-danger p-0"
-                                    onClick={() =>
-                                      setSikapList(
-                                        sikapList.filter((x) => x.id !== s.id),
-                                      )
-                                    }
-                                    title="Hapus"
-                                  >
-                                    <i className="bi bi-trash"></i>
-                                  </button>
+                            {sikapList.length === 0 ? (
+                              <tr>
+                                <td colSpan="3" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-4 d-block mb-1"></i>
+                                  Tidak ada data sikap menembak ditemukan
                                 </td>
                               </tr>
-                            ))}
+                            ) : (
+                              sikapList.map((s, idx) => (
+                                <tr key={s.id_sikap_menembak || s.id || idx}>
+                                  <td className="text-secondary">{idx + 1}</td>
+                                  <td className="fw-bold">{s.nama_sikap_menembak || s.nama}</td>
+                                  <td className="text-center">
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-link text-danger p-0"
+                                      onClick={() =>
+                                        handleDeleteSikap(
+                                          s.id_sikap_menembak || s.id,
+                                          s.nama_sikap_menembak || s.nama
+                                        )
+                                      }
+                                      title="Hapus Sikap Menembak dari Database"
+                                    >
+                                      <i className="bi bi-trash"></i>
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
                           </tbody>
                         </table>
                       </div>
@@ -1453,7 +1791,7 @@ export const Pengaturan = () => {
                     </div>
                     <div className="card-body p-3">
                       <form onSubmit={handleAddSikap}>
-                        <div className="mb-2">
+                        <div className="mb-3">
                           <label className="form-label small fw-semibold">
                             Nama Sikap
                           </label>
@@ -1471,9 +1809,22 @@ export const Pengaturan = () => {
                         <button
                           type="submit"
                           className="btn btn-primary btn-sm w-100"
+                          disabled={isSubmitting}
                         >
-                          <i className="bi bi-plus-lg me-1"></i> Simpan Sikap
-                          Menembak
+                          {isSubmitting ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
+                              Menyimpan ke Database...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-plus-lg me-1"></i> Simpan Sikap Menembak
+                            </>
+                          )}
                         </button>
                       </form>
                     </div>
