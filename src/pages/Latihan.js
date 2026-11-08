@@ -6,10 +6,13 @@ import { Sidebar } from "../component/Sidebar";
 import { Breadcrumb } from "../component/Breadcrumb";
 import { ModalTambahSesi } from "../component/modal/ModalTambahSesi";
 import { getBackendUrl } from "../services/apiConfig";
+import { getCurrentUser, getRolePermissions } from "../services/authService";
 
 export const Latihan = () => {
     document.title = "Latihan - SITRAK-AI";
     const navigate = useNavigate();
+    const currentUser = getCurrentUser();
+    const permissions = getRolePermissions(currentUser);
 
     // State Sesi Latihan & Pagination
     const [sesiList, setSesiList] = React.useState([]);
@@ -339,18 +342,27 @@ export const Latihan = () => {
                                     <i className="bi bi-bullseye me-2 text-primary"></i>Sesi Latihan Menembak
                                 </h2>
                                 <p className="text-secondary mb-0 small">
-                                    Kelola, pantau real-time, dan mulai sesi latihan menembak taktis
+                                    {permissions.canCreateSession
+                                        ? "Kelola, pantau real-time, dan mulai sesi latihan menembak taktis"
+                                        : "Pantau jalannya sesi latihan, tinjau rekapitulasi nilai, dan evaluasi laporan"}
                                 </p>
                             </div>
                             <div>
-                                <button
-                                    type="button"
-                                    className="btn btn-primary px-3 py-2 shadow-sm d-flex align-items-center"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalTambahSesi"
-                                >
-                                    <i className="bi bi-plus-lg me-1"></i> Tambahkan Sesi
-                                </button>
+                                {permissions.canCreateSession ? (
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary px-3 py-2 shadow-sm d-flex align-items-center"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalTambahSesi"
+                                    >
+                                        <i className="bi bi-plus-lg me-1"></i> Tambahkan Sesi
+                                    </button>
+                                ) : (
+                                    <span className="badge bg-success-subtle text-success border border-success px-3 py-2 d-inline-flex align-items-center gap-2">
+                                        <i className="bi bi-award-fill fs-6"></i>
+                                        <span>Mode Pemantauan & Evaluasi ({currentUser?.roleLabel})</span>
+                                    </span>
+                                )}
                             </div>
                         </div>
 

@@ -272,10 +272,10 @@ export const ModalUploadTargetDetect = ({
       id: "gemini",
       name: "Google Gemini Cloud AI",
       type: "cloud_multimodal_ai",
-      model: "gemini-3.8-flash",
+      model: getGeminiModel() || "gemini-3.5-flash-lite",
       is_available: true,
       description:
-        "Model multimodal vision Google Gemini untuk deteksi sasaran tembak berbasis cloud.",
+        "Model multimodal vision Google Gemini dengan diskriminasi serabut robekan peluru vs tambalan penutup sasaran.",
     },
   ]);
 
@@ -325,6 +325,9 @@ export const ModalUploadTargetDetect = ({
   };
 
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+  const [showActionSheet, setShowActionSheet] = useState(false);
 
   // State Kamera Langsung & Overlay
   const [inputMode, setInputMode] = useState("file"); // 'file' | 'camera'
@@ -1149,10 +1152,27 @@ export const ModalUploadTargetDetect = ({
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => setShowActionSheet(true)}
                   >
+                    {/* 1. Input Kamera HP langsung via OS intent capture (Khusus Android/iOS Camera) */}
                     <input
-                      ref={fileInputRef}
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="d-none"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileChange(e.target.files[0]);
+                        }
+                        e.target.value = "";
+                      }}
+                      disabled={isProcessing}
+                    />
+
+                    {/* 2. Input Galeri Foto (Photo Library) */}
+                    <input
+                      ref={galleryInputRef}
                       type="file"
                       accept="image/*"
                       className="d-none"
@@ -1160,6 +1180,22 @@ export const ModalUploadTargetDetect = ({
                         if (e.target.files && e.target.files[0]) {
                           handleFileChange(e.target.files[0]);
                         }
+                        e.target.value = "";
+                      }}
+                      disabled={isProcessing}
+                    />
+
+                    {/* 3. Input Berkas / Dokumen / File Storage */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,.jpg,.jpeg,.png,.webp,.heic"
+                      className="d-none"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files[0]) {
+                          handleFileChange(e.target.files[0]);
+                        }
+                        e.target.value = "";
                       }}
                       disabled={isProcessing}
                     />
@@ -1184,6 +1220,16 @@ export const ModalUploadTargetDetect = ({
                         <div className="d-flex justify-content-center gap-2 mt-2">
                           <button
                             type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowActionSheet(true);
+                            }}
+                          >
+                            <i className="bi bi-camera me-1"></i> Ganti Foto (Kamera / Galeri)
+                          </button>
+                          <button
+                            type="button"
                             className="btn btn-sm btn-outline-danger"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1192,7 +1238,7 @@ export const ModalUploadTargetDetect = ({
                               setAnalysisResult(null);
                             }}
                           >
-                            <i className="bi bi-trash me-1"></i> Ganti Foto
+                            <i className="bi bi-trash me-1"></i> Hapus
                           </button>
                         </div>
                       </div>
@@ -1207,13 +1253,46 @@ export const ModalUploadTargetDetect = ({
                         <p className="small text-secondary mb-3">
                           Format didukung: JPG, JPEG, PNG (Maksimal 15 MB)
                         </p>
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline-primary px-3"
-                        >
-                          <i className="bi bi-folder2-open me-1"></i> Jelajahi
-                          Berkas
-                        </button>
+
+                        {/* Opsi Cepat: Buka Kamera HP atau Pilih dari Galeri */}
+                        <div className="d-flex flex-wrap justify-content-center gap-2 mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-primary px-3 shadow-sm d-inline-flex align-items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cameraInputRef.current?.click();
+                            }}
+                            title="Buka Kamera HP untuk memotret sasaran tembak baru"
+                          >
+                            <i className="bi bi-camera-fill"></i>
+                            <span>Ambil Foto (Kamera)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary px-3 d-inline-flex align-items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              galleryInputRef.current?.click();
+                            }}
+                            title="Pilih foto dari Galeri HP"
+                          >
+                            <i className="bi bi-images"></i>
+                            <span>Galeri Foto</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary px-2 d-inline-flex align-items-center gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowActionSheet(true);
+                            }}
+                            title="Tampilkan pilihan menu sumber foto ala Safari iOS"
+                          >
+                            <i className="bi bi-three-dots"></i>
+                            <span>Pilihan</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1866,6 +1945,23 @@ export const ModalUploadTargetDetect = ({
                           )?.name || analysisResult.detection_engine_used}
                         </span>
                       )}
+                      {analysisResult.patches_detected_count > 0 && (
+                        <span
+                          className="badge bg-secondary-subtle text-dark border border-secondary d-inline-flex align-items-center gap-1"
+                          style={{ fontSize: "0.72rem" }}
+                          title={analysisResult.patches_excluded
+                            ?.map(
+                              (p) =>
+                                `${p.location || "Tambalan"}: ${
+                                  p.reason || "Diabaikan"
+                                }`
+                            )
+                            .join(" | ")}
+                        >
+                          <i className="bi bi-patch-check"></i>
+                          {analysisResult.patches_detected_count} Tambalan Diabaikan
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1917,6 +2013,34 @@ export const ModalUploadTargetDetect = ({
                       <div className="small text-secondary">
                         Terdeteksi <strong>{analysisResult.shots_detected} butir tembakan</strong> pada sasaran, sedangkan alokasi peluru untuk <strong>{currentBabak?.nama_babak || "Babak Ini"}</strong> adalah <strong>{bulletQuota} butir</strong>.
                         Sistem secara otomatis menandai dan mengambil <strong>{bulletQuota} tembakan terbaik</strong> (skor poin tertinggi & terdekat ke titik pusat) untuk penilaian akhir dan penyimpanan data.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* INFORMASI DISKRIMINASI TAMBALAN SASARAN JIKA DITEMUKAN */}
+                {analysisResult.patches_detected_count > 0 && (
+                  <div
+                    className="alert alert-secondary border border-secondary shadow-sm d-flex align-items-center gap-3 mb-3 p-3"
+                    role="alert"
+                  >
+                    <div className="fs-3 text-secondary lh-1">
+                      <i className="bi bi-patch-check-fill text-success"></i>
+                    </div>
+                    <div className="flex-grow-1 small">
+                      <div className="fw-bold text-dark mb-1">
+                        Filter Tambalan Sasaran Aktif: {analysisResult.patches_detected_count} Tambalan Kertas/Stiker Lama Diabaikan
+                      </div>
+                      <div className="text-secondary">
+                        Sistem Gemini mendeteksi serabut robekan fisik (3D torn paper fibers) untuk lubang tembakan asli, serta mengabaikan stiker/tambalan datar penutup lubang lama agar tidak keliru dihitung.
+                        {Array.isArray(analysisResult.patches_excluded) && analysisResult.patches_excluded.length > 0 && (
+                          <span className="d-block mt-1 fst-italic text-muted">
+                            Lokasi tambalan diabaikan:{" "}
+                            {analysisResult.patches_excluded
+                              .map((p) => p.location || `x:${p.x}%, y:${p.y}%`)
+                              .join(", ")}.
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2357,7 +2481,7 @@ export const ModalUploadTargetDetect = ({
           </div>
 
           {/* FOOTER MODAL */}
-          <div className="modal-footer bg-light p-2">
+          <div className="modal-footer p-2">
             <small className="text-muted me-auto d-none d-md-block">
               <i className="bi bi-shield-check me-1 text-primary"></i>
               SITRAK-Detect Vision Service • Endpoint: {getDetectApiUrl()}
@@ -2373,6 +2497,125 @@ export const ModalUploadTargetDetect = ({
           </div>
         </div>
       </div>
+
+      {/* ACTION SHEET PILIHAN SUMBER FOTO (ALA SAFARI IOS DI CHROME ANDROID & DESKTOP) */}
+      {showActionSheet && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-end align-items-sm-center justify-content-center"
+          style={{
+            backgroundColor: "rgba(0, 0, 0, 0.65)",
+            zIndex: 1080,
+            backdropFilter: "blur(4px)",
+            padding: "1rem",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+          onClick={() => setShowActionSheet(false)}
+        >
+          <div
+            className="card border-0 shadow-lg text-body rounded-4 overflow-hidden"
+            style={{
+              width: "100%",
+              maxWidth: "360px",
+              backgroundColor: "rgba(28, 33, 44, 0.96)",
+              color: "#ffffff",
+              backdropFilter: "blur(16px)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-3 border-bottom border-secondary border-opacity-25 text-center">
+              <div className="fw-semibold text-white">
+                Pilih Sumber Foto Sasaran
+              </div>
+              <small className="text-white-50" style={{ fontSize: "11px" }}>
+                Gunakan kamera HP atau ambil dari galeri berkas
+              </small>
+            </div>
+
+            <div className="list-group list-group-flush bg-transparent">
+              {/* 1. Ambil Foto Baru (Kamera) */}
+              <button
+                type="button"
+                className="list-group-item list-group-item-action bg-transparent text-white border-secondary border-opacity-25 py-3 px-3 d-flex align-items-center gap-3"
+                onClick={() => {
+                  setShowActionSheet(false);
+                  cameraInputRef.current?.click();
+                }}
+              >
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center bg-primary text-white shadow-sm flex-shrink-0"
+                  style={{ width: "42px", height: "42px" }}
+                >
+                  <i className="bi bi-camera-fill fs-5"></i>
+                </div>
+                <div className="text-start">
+                  <div className="fw-bold fs-6">Take Photo (Buka Kamera)</div>
+                  <div className="text-white-50 small" style={{ fontSize: "11px" }}>
+                    Buka kamera HP langsung untuk memotret target
+                  </div>
+                </div>
+              </button>
+
+              {/* 2. Galeri Foto (Photo Library) */}
+              <button
+                type="button"
+                className="list-group-item list-group-item-action bg-transparent text-white border-secondary border-opacity-25 py-3 px-3 d-flex align-items-center gap-3"
+                onClick={() => {
+                  setShowActionSheet(false);
+                  galleryInputRef.current?.click();
+                }}
+              >
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center bg-success text-white shadow-sm flex-shrink-0"
+                  style={{ width: "42px", height: "42px" }}
+                >
+                  <i className="bi bi-images fs-5"></i>
+                </div>
+                <div className="text-start">
+                  <div className="fw-bold fs-6">Photo Library (Galeri Foto)</div>
+                  <div className="text-white-50 small" style={{ fontSize: "11px" }}>
+                    Pilih dari album / galeri foto perangkat
+                  </div>
+                </div>
+              </button>
+
+              {/* 3. Jelajahi File / Dokumen (Choose File) */}
+              <button
+                type="button"
+                className="list-group-item list-group-item-action bg-transparent text-white border-secondary border-opacity-25 py-3 px-3 d-flex align-items-center gap-3"
+                onClick={() => {
+                  setShowActionSheet(false);
+                  fileInputRef.current?.click();
+                }}
+              >
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center bg-warning text-dark shadow-sm flex-shrink-0"
+                  style={{ width: "42px", height: "42px" }}
+                >
+                  <i className="bi bi-folder2-open fs-5"></i>
+                </div>
+                <div className="text-start">
+                  <div className="fw-bold fs-6">Choose File (Pilih Berkas)</div>
+                  <div className="text-white-50 small" style={{ fontSize: "11px" }}>
+                    Jelajahi penyimpanan internal / dokumen
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="p-2 border-top border-secondary border-opacity-25 bg-black bg-opacity-25">
+              <button
+                type="button"
+                className="btn btn-outline-light w-100 py-2 rounded-3"
+                onClick={() => setShowActionSheet(false)}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

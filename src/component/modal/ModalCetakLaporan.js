@@ -1,5 +1,11 @@
 import React, { useState, useMemo } from "react";
 import { parseCatatanAnalisis } from "../../services/sitrakDetectService";
+import {
+  DokumenLaporanIndividu,
+  ModalCetakLaporanIndividu,
+} from "./ModalCetakLaporanIndividu";
+
+export { DokumenLaporanIndividu, ModalCetakLaporanIndividu };
 
 /**
  * Komponen Dokumen Laporan Resmi Latihan Menembak (SITRAK-AI)
@@ -585,8 +591,6 @@ export const DokumenLaporanSesi = ({
                           badgeClass = "badge bg-danger-subtle text-danger border border-danger";
                         }
 
-                        const shooterNoteSummary = sertakanCatatanAnalisis ? getShooterNotesSummary(p) : null;
-
                         return (
                           <React.Fragment key={p.id_personel_penembak || idx}>
                             <tr style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
@@ -914,12 +918,48 @@ export const ModalCetakLaporan = ({
   onClose,
   sesi,
   activeGelombang = 1,
+  defaultJenisLaporan = "sesi",
+  defaultSelectedPenembak = null,
 }) => {
+  // Jenis laporan: "sesi" (rekapitulasi seluruh sesi) atau "individu" (kartu hasil tembak perorangan)
+  const [jenisLaporan, setJenisLaporan] = useState(defaultJenisLaporan);
+
+  // Seluruh penembak di sesi untuk pilihan laporan individu
+  const allShooters = useMemo(() => {
+    if (!sesi?.gelombang_list) return [];
+    return sesi.gelombang_list.flatMap((g) =>
+      (g.penembak || []).map((p) => ({
+        ...p,
+        nomor_gelombang: g.nomor_gelombang,
+      }))
+    );
+  }, [sesi]);
+
+  const [selectedIndividuId, setSelectedIndividuId] = useState(
+    defaultSelectedPenembak?.id_personel_penembak ||
+      (defaultSelectedPenembak
+        ? `${defaultSelectedPenembak.nomor_gelombang || 1}-${defaultSelectedPenembak.lane || 1}`
+        : allShooters[0]?.id_personel_penembak ||
+          (allShooters[0] ? `${allShooters[0].nomor_gelombang || 1}-${allShooters[0].lane || 1}` : ""))
+  );
+
+  const currentIndividualShooter = useMemo(() => {
+    if (!selectedIndividuId && defaultSelectedPenembak) return defaultSelectedPenembak;
+    const found = allShooters.find(
+      (s) =>
+        String(s.id_personel_penembak) === String(selectedIndividuId) ||
+        `${s.nomor_gelombang}-${s.lane}` === String(selectedIndividuId)
+    );
+    return found || defaultSelectedPenembak || allShooters[0] || null;
+  }, [selectedIndividuId, allShooters, defaultSelectedPenembak]);
+
   // Opsi cetak
   const [filterGelombang, setFilterGelombang] = useState("semua"); // "semua" | string nomor gelombang
   const [sertakanBalistik, setSertakanBalistik] = useState(true);
   const [sertakanCatatanAnalisis, setSertakanCatatanAnalisis] = useState(true);
   const [sertakanTandaTangan, setSertakanTandaTangan] = useState(true);
+  const [sertakanFotoTarget, setSertakanFotoTarget] = useState(true);
+  const [sertakanVisualizerSvg] = useState(true);
   const [namaPenandatangan1, setNamaPenandatangan1] = useState(
     sesi?.pelatih || "Tommy Firmansyah, S.Hub.Int."
   );
@@ -974,30 +1014,95 @@ export const ModalCetakLaporan = ({
 
           {/* Toolbar Konfigurasi Cetak (Layar Web - Tidak Tercetak) */}
           <div className="bg-dark text-light border-bottom p-3 no-print">
+            {/* Navigasi Pilihan Mode Laporan (Sesi vs Individu) */}
+            <div className="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom border-secondary border-opacity-50 flex-wrap gap-2">
+              <div className="btn-group btn-group-sm" role="group">
+                <button
+                  type="button"
+                  className={`btn ${
+                    jenisLaporan === "sesi"
+                      ? "btn-primary fw-bold shadow-sm"
+                      : "btn-outline-secondary text-light"
+                  }`}
+                  onClick={() => setJenisLaporan("sesi")}
+                >
+                  <i className="bi bi-file-earmark-spreadsheet me-1"></i>
+                  Rekapitulasi Seluruh Sesi
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${
+                    jenisLaporan === "individu"
+                      ? "btn-primary fw-bold shadow-sm"
+                      : "btn-outline-secondary text-light"
+                  }`}
+                  onClick={() => setJenisLaporan("individu")}
+                >
+                  <i className="bi bi-file-earmark-person-fill me-1 text-warning"></i>
+                  Laporan Individu (Perorangan)
+                </button>
+              </div>
+              <div className="small text-secondary font-monospace">
+                <i className="bi bi-info-circle me-1 text-info"></i>
+                {jenisLaporan === "sesi"
+                  ? "Berita Acara Rekapitulasi Nilai Seluruh Gelombang"
+                  : "Lembar Hasil & Evaluasi Menembak Perorangan"}
+              </div>
+            </div>
+
             {/* Baris 1: Filter & Pengaturan Umum */}
             <div className="row g-3 align-items-center mb-2">
-              <div className="col-12 col-md-4">
-                <label className="form-label small fw-semibold mb-1 text-light">
-                  <i className="bi bi-filter me-1 text-warning"></i> Cakupan Gelombang:
-                </label>
-                <select
-                  className="form-select form-select-sm"
-                  value={filterGelombang}
-                  onChange={(e) => setFilterGelombang(e.target.value)}
-                >
-                  <option value="semua">
-                    Semua Gelombang ({sesi.gelombang_list?.length || 1} Gelombang)
-                  </option>
-                  {(sesi.gelombang_list || []).map((g) => (
-                    <option
-                      key={g.id_gelombang || g.nomor_gelombang}
-                      value={g.nomor_gelombang}
-                    >
-                      Gelombang {g.nomor_gelombang} ({g.penembak?.length || 0} Personel)
+              {jenisLaporan === "sesi" ? (
+                <div className="col-12 col-md-4">
+                  <label className="form-label small fw-semibold mb-1 text-light">
+                    <i className="bi bi-filter me-1 text-warning"></i> Cakupan Gelombang:
+                  </label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={filterGelombang}
+                    onChange={(e) => setFilterGelombang(e.target.value)}
+                  >
+                    <option value="semua">
+                      Semua Gelombang ({sesi.gelombang_list?.length || 1} Gelombang)
                     </option>
-                  ))}
-                </select>
-              </div>
+                    {(sesi.gelombang_list || []).map((g) => (
+                      <option
+                        key={g.id_gelombang || g.nomor_gelombang}
+                        value={g.nomor_gelombang}
+                      >
+                        Gelombang {g.nomor_gelombang} ({g.penembak?.length || 0} Personel)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="col-12 col-md-4">
+                  <label className="form-label small fw-semibold mb-1 text-light">
+                    <i className="bi bi-person-fill me-1 text-warning"></i> Pilih Personel Penembak:
+                  </label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={
+                      selectedIndividuId ||
+                      currentIndividualShooter?.id_personel_penembak ||
+                      `${currentIndividualShooter?.nomor_gelombang || 1}-${currentIndividualShooter?.lane || 1}`
+                    }
+                    onChange={(e) => setSelectedIndividuId(e.target.value)}
+                  >
+                    {allShooters.map((s) => (
+                      <option
+                        key={s.id_personel_penembak || `${s.nomor_gelombang}-${s.lane}`}
+                        value={
+                          s.id_personel_penembak ||
+                          `${s.nomor_gelombang}-${s.lane}`
+                        }
+                      >
+                        Gel {s.nomor_gelombang} • Lane {s.lane}: {s.nama} ({s.satuan || "NRP: " + s.nrp})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="col-12 col-md-4">
                 <label className="form-label small fw-semibold mb-1 text-light">
@@ -1028,21 +1133,39 @@ export const ModalCetakLaporan = ({
                     Sertakan Analisis Balistik
                   </label>
                 </div>
-                <div className="form-check form-switch mb-0">
-                  <input
-                    className="form-check-input"
-                    type="checkbox"
-                    id="checkCatatanAnalisis"
-                    checked={sertakanCatatanAnalisis}
-                    onChange={(e) => setSertakanCatatanAnalisis(e.target.checked)}
-                  />
-                  <label
-                    className="form-check-label small fw-semibold text-light"
-                    htmlFor="checkCatatanAnalisis"
-                  >
-                    Sertakan Catatan Analisis Taktis
-                  </label>
-                </div>
+                {jenisLaporan === "sesi" ? (
+                  <div className="form-check form-switch mb-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="checkCatatanAnalisis"
+                      checked={sertakanCatatanAnalisis}
+                      onChange={(e) => setSertakanCatatanAnalisis(e.target.checked)}
+                    />
+                    <label
+                      className="form-check-label small fw-semibold text-light"
+                      htmlFor="checkCatatanAnalisis"
+                    >
+                      Sertakan Catatan Analisis Taktis
+                    </label>
+                  </div>
+                ) : (
+                  <div className="form-check form-switch mb-0">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="checkFotoIndividu"
+                      checked={sertakanFotoTarget}
+                      onChange={(e) => setSertakanFotoTarget(e.target.checked)}
+                    />
+                    <label
+                      className="form-check-label small fw-semibold text-light"
+                      htmlFor="checkFotoIndividu"
+                    >
+                      Sertakan Foto Kamera Target
+                    </label>
+                  </div>
+                )}
                 <div className="form-check form-switch mb-0">
                   <input
                     className="form-check-input"
@@ -1126,19 +1249,38 @@ export const ModalCetakLaporan = ({
             className="modal-body p-3 p-md-4 bg-secondary-subtle"
             style={{ maxHeight: "72vh", overflowY: "auto" }}
           >
-            <DokumenLaporanSesi
-              sesi={sesi}
-              filterGelombang={filterGelombang}
-              sertakanBalistik={sertakanBalistik}
-              sertakanCatatanAnalisis={sertakanCatatanAnalisis}
-              sertakanTandaTangan={sertakanTandaTangan}
-              namaPenandatangan1={namaPenandatangan1}
-              pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
-              namaPenandatangan2={namaPenandatangan2}
-              pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
-              lokasiPenerbitan={lokasiPenerbitan}
-              isPrintMode={false}
-            />
+            {jenisLaporan === "individu" && currentIndividualShooter ? (
+              <DokumenLaporanIndividu
+                sesi={sesi}
+                penembak={currentIndividualShooter}
+                sertakanFotoTarget={sertakanFotoTarget}
+                sertakanVisualizerSvg={sertakanVisualizerSvg}
+                sertakanBalistik={sertakanBalistik}
+                sertakanTandaTangan={sertakanTandaTangan}
+                namaPenandatangan1={namaPenandatangan1}
+                pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
+                namaPenandatangan2={namaPenandatangan2}
+                pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
+                namaPenembakTtd={currentIndividualShooter.nama}
+                pangkatNrpPenembakTtd={currentIndividualShooter.nrp ? `NRP: ${currentIndividualShooter.nrp}` : ""}
+                lokasiPenerbitan={lokasiPenerbitan}
+                isPrintMode={false}
+              />
+            ) : (
+              <DokumenLaporanSesi
+                sesi={sesi}
+                filterGelombang={filterGelombang}
+                sertakanBalistik={sertakanBalistik}
+                sertakanCatatanAnalisis={sertakanCatatanAnalisis}
+                sertakanTandaTangan={sertakanTandaTangan}
+                namaPenandatangan1={namaPenandatangan1}
+                pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
+                namaPenandatangan2={namaPenandatangan2}
+                pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
+                lokasiPenerbitan={lokasiPenerbitan}
+                isPrintMode={false}
+              />
+            )}
           </div>
 
           {/* Footer Modal (Layar Web - Tidak Tercetak) */}
@@ -1172,19 +1314,38 @@ export const ModalCetakLaporan = ({
 
       {/* 2. DOKUMEN CETAK RESMI (HANYA AKTIF SAAT CETAK @media print, DIMULAI DARI PALING ATAS HALAMAN A4) */}
       <div id="sitrak-print-area" className="d-none d-print-block">
-        <DokumenLaporanSesi
-          sesi={sesi}
-          filterGelombang={filterGelombang}
-          sertakanBalistik={sertakanBalistik}
-          sertakanCatatanAnalisis={sertakanCatatanAnalisis}
-          sertakanTandaTangan={sertakanTandaTangan}
-          namaPenandatangan1={namaPenandatangan1}
-          pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
-          namaPenandatangan2={namaPenandatangan2}
-          pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
-          lokasiPenerbitan={lokasiPenerbitan}
-          isPrintMode={true}
-        />
+        {jenisLaporan === "individu" && currentIndividualShooter ? (
+          <DokumenLaporanIndividu
+            sesi={sesi}
+            penembak={currentIndividualShooter}
+            sertakanFotoTarget={sertakanFotoTarget}
+            sertakanVisualizerSvg={sertakanVisualizerSvg}
+            sertakanBalistik={sertakanBalistik}
+            sertakanTandaTangan={sertakanTandaTangan}
+            namaPenandatangan1={namaPenandatangan1}
+            pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
+            namaPenandatangan2={namaPenandatangan2}
+            pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
+            namaPenembakTtd={currentIndividualShooter.nama}
+            pangkatNrpPenembakTtd={currentIndividualShooter.nrp ? `NRP: ${currentIndividualShooter.nrp}` : ""}
+            lokasiPenerbitan={lokasiPenerbitan}
+            isPrintMode={true}
+          />
+        ) : (
+          <DokumenLaporanSesi
+            sesi={sesi}
+            filterGelombang={filterGelombang}
+            sertakanBalistik={sertakanBalistik}
+            sertakanCatatanAnalisis={sertakanCatatanAnalisis}
+            sertakanTandaTangan={sertakanTandaTangan}
+            namaPenandatangan1={namaPenandatangan1}
+            pangkatNrpPenandatangan1={pangkatNrpPenandatangan1}
+            namaPenandatangan2={namaPenandatangan2}
+            pangkatNrpPenandatangan2={pangkatNrpPenandatangan2}
+            lokasiPenerbitan={lokasiPenerbitan}
+            isPrintMode={true}
+          />
+        )}
       </div>
     </>
   );

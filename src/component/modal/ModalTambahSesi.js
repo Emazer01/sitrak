@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { ModalImportPesertaSesi } from "./ModalImportPesertaSesi";
+import { downloadTemplatePesertaExcel } from "../../services/importPesertaService";
 
 export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession }) => {
     // 1. Informasi Sesi & Lokasi
@@ -43,6 +45,22 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
     // Personel yang dipilih ikut menembak
     const [selectedPersonelIds, setSelectedPersonelIds] = useState([]);
     const [searchPersonel, setSearchPersonel] = useState("");
+    const [showImportPesertaModal, setShowImportPesertaModal] = useState(false);
+    const [importFeedback, setImportFeedback] = useState(null);
+
+    const handleImportPesertaSuccess = (result) => {
+        const { updatedMasterPersonel, newSelectedPersonelIds, summary } = result;
+        if (Array.isArray(updatedMasterPersonel)) {
+            setMasterPersonel(updatedMasterPersonel);
+        }
+        if (Array.isArray(newSelectedPersonelIds)) {
+            setSelectedPersonelIds(newSelectedPersonelIds);
+        }
+        setImportFeedback(
+            summary?.message ||
+            `Berhasil memproses dan memilih ${newSelectedPersonelIds.length} peserta dari berkas Excel.`
+        );
+    };
 
     // 4. Konfigurasi Babak & Peluru
     const [jumlahBabak, setJumlahBabak] = useState(2);
@@ -477,7 +495,31 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                             Pilih personel dari daftar master. Lane & gelombang ditentukan otomatis.
                                         </small>
                                     </div>
-                                    <div className="d-flex gap-2 align-items-center">
+                                    <div className="d-flex flex-wrap gap-2 align-items-center">
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-success d-inline-flex align-items-center gap-1"
+                                            onClick={() => {
+                                                try {
+                                                    downloadTemplatePesertaExcel();
+                                                } catch (e) {
+                                                    alert(e.message);
+                                                }
+                                            }}
+                                            title="Unduh berkas template Excel resmi untuk daftar peserta"
+                                        >
+                                            <i className="bi bi-file-earmark-arrow-down"></i>
+                                            Unduh Template Excel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-success d-inline-flex align-items-center gap-1 shadow-sm"
+                                            onClick={() => setShowImportPesertaModal(true)}
+                                            title="Unggah berkas Excel untuk memilih peserta (sinkronisasi otomatis ke database)"
+                                        >
+                                            <i className="bi bi-file-earmark-excel-fill"></i>
+                                            Upload Excel Peserta
+                                        </button>
                                         <button
                                             type="button"
                                             className="btn btn-sm btn-outline-primary"
@@ -494,6 +536,23 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Banner Feedback Hasil Import Excel Peserta */}
+                                {importFeedback && (
+                                    <div
+                                        className="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 p-2 px-3 mb-3 small"
+                                        role="alert"
+                                    >
+                                        <i className="bi bi-check-circle-fill text-success fs-5"></i>
+                                        <div className="flex-grow-1">{importFeedback}</div>
+                                        <button
+                                            type="button"
+                                            className="btn-close p-2"
+                                            onClick={() => setImportFeedback(null)}
+                                            aria-label="Tutup"
+                                        ></button>
+                                    </div>
+                                )}
 
                                 {/* Selector Checkbox Personel */}
                                 <div className=" p-3 rounded-2 border mb-3">
@@ -1004,6 +1063,15 @@ export const ModalTambahSesi = ({ modalId = "modalTambahSesi", onStartSession })
                     </div>
                 </div>
             </div>
+
+            {/* Modal Import Peserta via Excel dengan Sinkronisasi Database Otomatis */}
+            <ModalImportPesertaSesi
+                show={showImportPesertaModal}
+                onHide={() => setShowImportPesertaModal(false)}
+                masterPersonel={masterPersonel}
+                currentSelectedIds={selectedPersonelIds}
+                onImportSuccess={handleImportPesertaSuccess}
+            />
         </div>
     );
 };

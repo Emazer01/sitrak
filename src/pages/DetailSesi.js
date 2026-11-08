@@ -8,16 +8,20 @@ import { ModalUploadTargetDetect } from "../component/modal/ModalUploadTargetDet
 import {
   ModalCetakLaporan,
   DokumenLaporanSesi,
+  ModalCetakLaporanIndividu,
 } from "../component/modal/ModalCetakLaporan";
 import {
   selectBestShots,
   parseCatatanAnalisis,
 } from "../services/sitrakDetectService";
 import { getBackendUrl } from "../services/apiConfig";
+import { getCurrentUser, getRolePermissions } from "../services/authService";
 
 export const DetailSesi = () => {
   const { id: paramId } = useParams();
   const navigate = useNavigate();
+  const currentUser = getCurrentUser();
+  const permissions = getRolePermissions(currentUser);
 
   // Jika terdapat ID pada URL, simpan ke localStorage lalu bersihkan URL (tanpa reload)
   React.useEffect(() => {
@@ -46,6 +50,24 @@ export const DetailSesi = () => {
 
   // State modal cetak & pratinjau laporan resmi
   const [showModalCetak, setShowModalCetak] = React.useState(false);
+
+  // State modal cetak laporan hasil perorangan (individu)
+  const [showModalCetakIndividu, setShowModalCetakIndividu] = React.useState(false);
+  const [selectedPenembakCetak, setSelectedPenembakCetak] = React.useState(null);
+
+  const handleOpenCetakIndividu = (penembak) => {
+    if (!penembak) return;
+    const penembakWithWave = {
+      ...penembak,
+      nomor_gelombang:
+        penembak.nomor_gelombang ||
+        currentWaveData?.nomor_gelombang ||
+        activeGelombang ||
+        1,
+    };
+    setSelectedPenembakCetak(penembakWithWave);
+    setShowModalCetakIndividu(true);
+  };
 
   // State visualizer target per babak
   const [selectedVisualizerBabakId, setSelectedVisualizerBabakId] =
@@ -639,6 +661,14 @@ export const DetailSesi = () => {
 
   // Handler untuk membuka modal upload & analisa target SITRAK-Detect
   const handleOpenUploadTargetModal = (shooter = null, babakId = null) => {
+    if (!permissions.canUploadTarget) {
+      setStatusAlert({
+        type: "warning",
+        message:
+          "Role akun Anda berada dalam mode pemantauan/evaluasi dan tidak memiliki wewenang mengunggah target.",
+      });
+      return;
+    }
     if ((sesi?.status || "").toLowerCase() !== "berlangsung") {
       setStatusAlert({
         type: "warning",
@@ -1093,138 +1123,141 @@ export const DetailSesi = () => {
                 <div className="d-flex align-items-center flex-wrap gap-2 col justify-content-end">
                   {renderStatusBadge(sesi.status)}
 
-                  {/* Dropdown Menu & Dialog Ubah Status */}
-                  <div className="btn-group">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
-                      data-bs-toggle="dropdown"
-                      aria-expanded="false"
-                      disabled={statusUpdating}
-                      title="Ubah Status Sesi"
-                    >
-                      {statusUpdating ? (
-                        <span
-                          className="spinner-border spinner-border-sm"
-                          role="status"
-                        />
-                      ) : (
-                        <i className="bi bi-arrow-repeat"></i>
-                      )}
-                      <span>Ubah Status</span>
-                    </button>
-                    <ul className="dropdown-menu dropdown-menu-end shadow border-0 py-2">
-                      <li>
-                        <h6 className="dropdown-header text-uppercase small fw-bold">
-                          Pilih Status Sesi
-                        </h6>
-                      </li>
-                      <li>
-                        <button
-                          className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Menunggu" ? "active" : ""
-                            }`}
-                          type="button"
-                          onClick={() => updateStatusSesi("Menunggu")}
-                          disabled={sesi.status === "Menunggu" || statusUpdating}
-                        >
-                          <span>
-                            <i className="bi bi-clock text-warning me-2"></i>
-                            Menunggu
-                          </span>
-                          {sesi.status === "Menunggu" && (
-                            <i className="bi bi-check2"></i>
-                          )}
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Berlangsung" ? "active" : ""
-                            }`}
-                          type="button"
-                          onClick={() => updateStatusSesi("Berlangsung")}
-                          disabled={
-                            sesi.status === "Berlangsung" || statusUpdating
-                          }
-                        >
-                          <span>
-                            <i className="bi bi-record-circle text-success me-2"></i>
-                            Berlangsung
-                          </span>
-                          {sesi.status === "Berlangsung" && (
-                            <i className="bi bi-check2"></i>
-                          )}
-                        </button>
-                      </li>
-                      <li>
-                        <button
-                          className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Selesai" ? "active" : ""
-                            }`}
-                          type="button"
-                          onClick={() => updateStatusSesi("Selesai")}
-                          disabled={sesi.status === "Selesai" || statusUpdating}
-                        >
-                          <span>
-                            <i className="bi bi-check-circle text-primary me-2"></i>
-                            Selesai
-                          </span>
-                          {sesi.status === "Selesai" && (
-                            <i className="bi bi-check2"></i>
-                          )}
-                        </button>
-                      </li>
-                      <li>
-                        <hr className="dropdown-divider my-1" />
-                      </li>
-                      <li>
-                        <button
-                          className={`dropdown-item text-danger d-flex align-items-center justify-content-between py-2 ${sesi.status === "Dibatalkan" ? "active" : ""
-                            }`}
-                          type="button"
-                          onClick={() => updateStatusSesi("Dibatalkan")}
-                          disabled={
-                            sesi.status === "Dibatalkan" || statusUpdating
-                          }
-                        >
-                          <span>
-                            <i className="bi bi-x-circle me-2"></i>
-                            Dibatalkan
-                          </span>
-                          {sesi.status === "Dibatalkan" && (
-                            <i className="bi bi-check2"></i>
-                          )}
-                        </button>
-                      </li>
-                      <li>
-                        <hr className="dropdown-divider my-1" />
-                      </li>
-                      <li>
-                        <button
-                          className="dropdown-item text-secondary small py-2 d-flex align-items-center gap-2"
-                          type="button"
-                          data-bs-toggle="modal"
-                          data-bs-target="#modalUbahStatusSesi"
-                          onClick={() =>
-                            setSelectedStatusInModal(sesi.status || "Menunggu")
-                          }
-                        >
-                          <i className="bi bi-sliders"></i>
-                          <span>Dialog Pilihan Status...</span>
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {(sesi?.status || "").toLowerCase() === "berlangsung" && (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm"
-                      onClick={() => handleOpenUploadTargetModal()}
-                      title="Unggah Foto Target & Deteksi Nilai dengan SITRAK-Detect"
-                    >
-                      <i className="bi bi-camera-fill me-1"></i>
-                      <span>Upload & Deteksi Target</span>
-                    </button>
+                  {/* Dropdown Menu & Dialog Ubah Status (Khusus Operator Latihan & Administrator) */}
+                  {permissions.canManageSessionStatus && (
+                    <div className="btn-group">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center gap-1"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        disabled={statusUpdating}
+                        title="Ubah Status Sesi"
+                      >
+                        {statusUpdating ? (
+                          <span
+                            className="spinner-border spinner-border-sm"
+                            role="status"
+                          />
+                        ) : (
+                          <i className="bi bi-arrow-repeat"></i>
+                        )}
+                        <span>Ubah Status</span>
+                      </button>
+                      <ul className="dropdown-menu dropdown-menu-end shadow border-0 py-2">
+                        <li>
+                          <h6 className="dropdown-header text-uppercase small fw-bold">
+                            Pilih Status Sesi
+                          </h6>
+                        </li>
+                        <li>
+                          <button
+                            className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Menunggu" ? "active" : ""
+                              }`}
+                            type="button"
+                            onClick={() => updateStatusSesi("Menunggu")}
+                            disabled={sesi.status === "Menunggu" || statusUpdating}
+                          >
+                            <span>
+                              <i className="bi bi-clock text-warning me-2"></i>
+                              Menunggu
+                            </span>
+                            {sesi.status === "Menunggu" && (
+                              <i className="bi bi-check2"></i>
+                            )}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Berlangsung" ? "active" : ""
+                              }`}
+                            type="button"
+                            onClick={() => updateStatusSesi("Berlangsung")}
+                            disabled={
+                              sesi.status === "Berlangsung" || statusUpdating
+                            }
+                          >
+                            <span>
+                              <i className="bi bi-record-circle text-success me-2"></i>
+                              Berlangsung
+                            </span>
+                            {sesi.status === "Berlangsung" && (
+                              <i className="bi bi-check2"></i>
+                            )}
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            className={`dropdown-item d-flex align-items-center justify-content-between py-2 ${sesi.status === "Selesai" ? "active" : ""
+                              }`}
+                            type="button"
+                            onClick={() => updateStatusSesi("Selesai")}
+                            disabled={sesi.status === "Selesai" || statusUpdating}
+                          >
+                            <span>
+                              <i className="bi bi-check-circle text-primary me-2"></i>
+                              Selesai
+                            </span>
+                            {sesi.status === "Selesai" && (
+                              <i className="bi bi-check2"></i>
+                            )}
+                          </button>
+                        </li>
+                        <li>
+                          <hr className="dropdown-divider my-1" />
+                        </li>
+                        <li>
+                          <button
+                            className={`dropdown-item text-danger d-flex align-items-center justify-content-between py-2 ${sesi.status === "Dibatalkan" ? "active" : ""
+                              }`}
+                            type="button"
+                            onClick={() => updateStatusSesi("Dibatalkan")}
+                            disabled={
+                              sesi.status === "Dibatalkan" || statusUpdating
+                            }
+                          >
+                            <span>
+                              <i className="bi bi-x-circle me-2"></i>
+                              Dibatalkan
+                            </span>
+                            {sesi.status === "Dibatalkan" && (
+                              <i className="bi bi-check2"></i>
+                            )}
+                          </button>
+                        </li>
+                        <li>
+                          <hr className="dropdown-divider my-1" />
+                        </li>
+                        <li>
+                          <button
+                            className="dropdown-item text-secondary small py-2 d-flex align-items-center gap-2"
+                            type="button"
+                            data-bs-toggle="modal"
+                            data-bs-target="#modalUbahStatusSesi"
+                            onClick={() =>
+                              setSelectedStatusInModal(sesi.status || "Menunggu")
+                            }
+                          >
+                            <i className="bi bi-sliders"></i>
+                            <span>Dialog Pilihan Status...</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
                   )}
+
+                  {permissions.canUploadTarget &&
+                    (sesi?.status || "").toLowerCase() === "berlangsung" && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm"
+                        onClick={() => handleOpenUploadTargetModal()}
+                        title="Unggah Foto Target & Deteksi Nilai dengan SITRAK-Detect"
+                      >
+                        <i className="bi bi-camera-fill me-1"></i>
+                        <span>Upload & Deteksi Target</span>
+                      </button>
+                    )}
 
                   <button
                     type="button"
@@ -1502,7 +1535,7 @@ export const DetailSesi = () => {
                                 </td>
                                 <td>{renderKategoriBadge(p.kategori)}</td>
                                 <td className="text-end">
-                                  <div className="d-flex align-items-center justify-content-end gap-1">
+                                  <div className="d-flex align-items-center justify-content-end gap-1 flex-wrap">
                                     <button
                                       type="button"
                                       className={`btn btn-sm ${isSelected
@@ -1517,24 +1550,34 @@ export const DetailSesi = () => {
                                         ? "Sedang Dilihat"
                                         : "Cek Target"}
                                     </button>
-                                    {(sesi?.status || "").toLowerCase() === "berlangsung" && (
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 shadow-sm"
-                                        onClick={() =>
-                                          handleOpenUploadTargetModal(
-                                            p,
-                                            activeBabakTab !== "semua"
-                                              ? activeBabakTab
-                                              : null,
-                                          )
-                                        }
-                                        title={`Unggah Foto Target & Deteksi Nilai untuk ${p.nama}`}
-                                      >
-                                        <i className="bi bi-camera me-1"></i>
-                                        Deteksi
-                                      </button>
-                                    )}
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline-info d-flex align-items-center gap-1 shadow-sm"
+                                      onClick={() => handleOpenCetakIndividu(p)}
+                                      title={`Cetak Lembar Laporan Hasil Menembak untuk ${p.nama}`}
+                                    >
+                                      <i className="bi bi-printer me-1"></i>
+                                      Cetak
+                                    </button>
+                                    {permissions.canUploadTarget &&
+                                      (sesi?.status || "").toLowerCase() === "berlangsung" && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1 shadow-sm"
+                                          onClick={() =>
+                                            handleOpenUploadTargetModal(
+                                              p,
+                                              activeBabakTab !== "semua"
+                                                ? activeBabakTab
+                                                : null,
+                                            )
+                                          }
+                                          title={`Unggah Foto Target & Deteksi Nilai untuk ${p.nama}`}
+                                        >
+                                          <i className="bi bi-camera me-1"></i>
+                                          Deteksi
+                                        </button>
+                                      )}
                                   </div>
                                 </td>
                               </tr>
@@ -1705,30 +1748,39 @@ export const DetailSesi = () => {
                             )}
                           </small>
                         </div>
-                        <div className="d-flex align-items-center gap-2">
-                          {(sesi?.status || "").toLowerCase() === "berlangsung" && (
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm"
-                              onClick={() =>
-                                handleOpenUploadTargetModal(
-                                  selectedPenembakTarget,
-                                  activeVisualizerBabak
-                                    ? activeVisualizerBabak.id_babak ||
-                                    activeVisualizerBabak.nomor
-                                    : selectedPenembakTarget.babak_scores?.[0]
-                                      ?.id_babak ||
-                                    selectedPenembakTarget.babak_scores?.[0]
-                                      ?.nomor ||
-                                    1,
-                                )
-                              }
-                              title="Upload foto target untuk dianalisis oleh SITRAK-Detect"
-                            >
-                              <i className="bi bi-camera me-1"></i> Upload Foto
-                              Target (Detect)
-                            </button>
-                          )}
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-info d-flex align-items-center gap-1 shadow-sm"
+                            onClick={() => handleOpenCetakIndividu(selectedPenembakTarget)}
+                            title={`Pratinjau & Cetak Lembar Penilaian Individu (${selectedPenembakTarget.nama})`}
+                          >
+                            <i className="bi bi-printer me-1"></i> Cetak Laporan Individu
+                          </button>
+                          {permissions.canUploadTarget &&
+                            (sesi?.status || "").toLowerCase() === "berlangsung" && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm"
+                                onClick={() =>
+                                  handleOpenUploadTargetModal(
+                                    selectedPenembakTarget,
+                                    activeVisualizerBabak
+                                      ? activeVisualizerBabak.id_babak ||
+                                      activeVisualizerBabak.nomor
+                                      : selectedPenembakTarget.babak_scores?.[0]
+                                        ?.id_babak ||
+                                      selectedPenembakTarget.babak_scores?.[0]
+                                        ?.nomor ||
+                                      1,
+                                  )
+                                }
+                                title="Upload foto target untuk dianalisis oleh SITRAK-Detect"
+                              >
+                                <i className="bi bi-camera me-1"></i> Upload Foto
+                                Target (Detect)
+                              </button>
+                            )}
                           <span className="badge bg-primary-subtle text-primary border border-primary px-3 py-2">
                             <i className="bi bi-cpu me-1"></i> Mode Deteksi
                             SITRAK-Detect
@@ -2337,7 +2389,7 @@ export const DetailSesi = () => {
       </div>
 
       {/* Dokumen Laporan Resmi untuk cetak langsung browser (Ctrl+P) jika modal cetak tidak sedang dibuka */}
-      {!showModalCetak && sesi && (
+      {!showModalCetak && !showModalCetakIndividu && sesi && (
         <div id="sitrak-print-area-fallback" className="d-none d-print-block">
           <DokumenLaporanSesi
             sesi={sesi}
@@ -2596,6 +2648,20 @@ export const DetailSesi = () => {
           onClose={() => setShowModalCetak(false)}
           sesi={sesi}
           activeGelombang={activeGelombang}
+        />
+      )}
+
+      {/* Modal Pratinjau & Cetak Lembar Laporan Individu Perorangan */}
+      {showModalCetakIndividu && sesi && selectedPenembakCetak && (
+        <ModalCetakLaporanIndividu
+          isOpen={showModalCetakIndividu}
+          onClose={() => {
+            setShowModalCetakIndividu(false);
+            setSelectedPenembakCetak(null);
+          }}
+          sesi={sesi}
+          selectedPenembak={selectedPenembakCetak}
+          onSelectPenembak={(newP) => setSelectedPenembakCetak(newP)}
         />
       )}
     </div>

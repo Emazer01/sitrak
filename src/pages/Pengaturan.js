@@ -3,13 +3,28 @@ import axios from "axios";
 import { Navbar } from "../component/Navbar";
 import { Sidebar } from "../component/Sidebar";
 import { Breadcrumb } from "../component/Breadcrumb";
-import { getBackendUrl } from "../services/apiConfig";
+import { getBackendUrl, getDetectApiUrl, getGeminiApiKey } from "../services/apiConfig";
+import { ModalImportExcelPersonel } from "../component/modal/ModalImportExcelPersonel";
+import { ModalTambahUser } from "../component/modal/ModalTambahUser";
+import { ModalEditUser } from "../component/modal/ModalEditUser";
+import {
+  ROLES,
+  ROLE_METADATA,
+  ROLES_LIST,
+  getRegisteredAccounts,
+  fetchUsersFromBackend,
+  deleteUserInBackend,
+  getCurrentUser,
+} from "../services/authService";
 
 export const Pengaturan = () => {
   document.title = "Pengaturan Parameter - SITRAK-AI";
 
   const [activeTab, setActiveTab] = React.useState("personel");
   const [searchQuery, setSearchQuery] = React.useState("");
+
+  // State Modal Import Excel Personel
+  const [showImportPersonelModal, setShowImportPersonelModal] = React.useState(false);
 
   // State Feedback Notifikasi & Loading Penambahan
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -63,6 +78,176 @@ export const Pengaturan = () => {
   const [newSikap, setNewSikap] = React.useState({
     nama: "",
   });
+
+  // 7. State Manajemen Akun & Role (Administrator - Tabel users PostgreSQL)
+  const [accountsList, setAccountsList] = React.useState(() =>
+    getRegisteredAccounts()
+  );
+  const [accountsLoading, setAccountsLoading] = React.useState(false);
+  const [showTambahUserModal, setShowTambahUserModal] = React.useState(false);
+  const [showEditUserModal, setShowEditUserModal] = React.useState(false);
+  const [selectedEditUser, setSelectedEditUser] = React.useState(null);
+  const [filterRoleAccount, setFilterRoleAccount] = React.useState("semua");
+  const [searchAccountQuery, setSearchAccountQuery] = React.useState("");
+
+  const loadUsersFromDatabase = React.useCallback(async () => {
+    setAccountsLoading(true);
+    try {
+      const users = await fetchUsersFromBackend();
+      setAccountsList(users);
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
+  // 8. State Pemeriksaan Konektivitas Layanan & Server (Administrator)
+  const [serviceStatus, setServiceStatus] = React.useState({
+    backend: { status: "idle", latencyMs: null, message: "Belum diperiksa" },
+    detectCv: { status: "idle", latencyMs: null, message: "Belum diperiksa" },
+    geminiAi: {
+      status: getGeminiApiKey() ? "configured" : "missing",
+      message: getGeminiApiKey()
+        ? "API Key Gemini terkonfigurasi di environment (.env)"
+        : "API Key Gemini belum diatur di .env",
+    },
+    lastCheckedAt: null,
+    checking: false,
+  });
+
+  const handleCheckServicesConnectivity = React.useCallback(async () => {
+    setServiceStatus((prev) => ({ ...prev, checking: true }));
+    const nowStr = new Date().toLocaleTimeString("id-ID");
+
+    // 1. Cek Backend API
+    let backendRes = {
+      status: "offline",
+      latencyMs: null,
+      message: "Tidak dapat terhubung ke SITRAK-Backend",
+    };
+    const t0Backend = performance.now();
+    try {
+      const res = await axios.get(`${getBackendUrl()}/atribut`, {
+        timeout: 5000,
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+      const latency = Math.round(performance.now() - t0Backend);
+      if (res.status >= 200 && res.status < 300) {
+        backendRes = {
+          status: "online",
+          latencyMs: latency,
+          message: `Terhubung normal (HTTP ${res.status})`,
+        };
+      }
+    } catch (err) {
+      const latency = Math.round(performance.now() - t0Backend);
+      backendRes = {
+        status: "offline",
+        latencyMs: latency,
+        message:
+          err.response?.status
+            ? `Merenspons dengan HTTP ${err.response.status}`
+            : `Koneksi gagal (${err.message || "Network Error"})`,
+      };
+    }
+
+    // 2. Cek SITRAK-Detect CV API
+    let detectRes = {
+      status: "offline",
+      latencyMs: null,
+      message: "Tidak dapat terhubung ke SITRAK-Detect CV",
+    };
+    const t0Detect = performance.now();
+    try {
+      const res = await axios.get(`${getDetectApiUrl()}/`, {
+        timeout: 5000,
+      });
+      const latency = Math.round(performance.now() - t0Detect);
+      if (res.status >= 200 && res.status < 400) {
+        detectRes = {
+          status: "online",
+          latencyMs: latency,
+          message: `Service CV aktif (HTTP ${res.status})`,
+        };
+      }
+    } catch (err) {
+      const latency = Math.round(performance.now() - t0Detect);
+      if (err.response && err.response.status) {
+        detectRes = {
+          status: "online",
+          latencyMs: latency,
+          message: `Endpoint aktif (HTTP ${err.response.status})`,
+        };
+      } else {
+        detectRes = {
+          status: "offline",
+          latencyMs: latency,
+          message: `Service tidak terjangkau (${err.message || "Network Error"})`,
+        };
+      }
+    }
+
+    // 3. Cek konfigurasi Gemini AI
+    const geminiKey = getGeminiApiKey();
+    const geminiRes = {
+      status: geminiKey ? "online" : "missing",
+      message: geminiKey
+        ? `Terkonfigurasi (${geminiKey.slice(0, 6)}...${geminiKey.slice(-4)})`
+        : "Variabel REACT_APP_GEMINI_API_KEY belum diatur pada server",
+    };
+
+    setServiceStatus({
+      backend: backendRes,
+      detectCv: detectRes,
+      geminiAi: geminiRes,
+      lastCheckedAt: nowStr,
+      checking: false,
+    });
+  }, []);
+
+  const handleRemoveAccount = async (id, nama) => {
+    const currentUser = getCurrentUser();
+    if (currentUser && (String(currentUser.id_user) === String(id) || String(currentUser.id) === String(id))) {
+      setAlertFeedback({
+        type: "warning",
+        message: "Anda tidak dapat menghapus akun Anda sendiri saat sedang aktif login.",
+      });
+      return;
+    }
+    if (!window.confirm(`Yakin ingin menghapus akun "${nama}" dari database PostgreSQL?`)) return;
+    setAlertFeedback(null);
+    const res = await deleteUserInBackend(id);
+    if (!res.success) {
+      setAlertFeedback({
+        type: "danger",
+        message: res.message,
+      });
+      return;
+    }
+    await loadUsersFromDatabase();
+    setAlertFeedback({
+      type: "success",
+      message: `Akun "${nama}" berhasil dihapus dari database PostgreSQL.`,
+    });
+  };
+
+  const filteredAccountsList = React.useMemo(() => {
+    return accountsList.filter((acc) => {
+      if (filterRoleAccount !== "semua" && acc.role !== filterRoleAccount) {
+        return false;
+      }
+      if (searchAccountQuery && searchAccountQuery.trim()) {
+        const q = searchAccountQuery.trim().toLowerCase();
+        const matchName = String(acc.nama || acc.nama_lengkap || "").toLowerCase().includes(q);
+        const matchUser = String(acc.username || "").toLowerCase().includes(q);
+        const matchNrp = String(acc.nrp || "").toLowerCase().includes(q);
+        const matchUnit = String(acc.satuan || "").toLowerCase().includes(q);
+        return matchName || matchUser || matchNrp || matchUnit;
+      }
+      return true;
+    });
+  }, [accountsList, filterRoleAccount, searchAccountQuery]);
   // Fungsi memanggil API /atribut dengan metode GET
   const getAtribut = async () => {
     try {
@@ -181,7 +366,8 @@ export const Pengaturan = () => {
       ?.classList.add("sidebar-active");
 
     getAtribut();
-  }, []);
+    loadUsersFromDatabase();
+  }, [loadUsersFromDatabase]);
 
   // Effect untuk menjalankan getPersonel saat page atau searchPersonel berubah
   React.useEffect(() => {
@@ -821,6 +1007,46 @@ export const Pengaturan = () => {
                       </span>
                     </button>
                   </li>
+                  <li className="nav-item flex-shrink-0">
+                    <button
+                      type="button"
+                      className={`nav-link py-2 text-nowrap d-flex align-items-center justify-content-center gap-2 ${
+                        activeTab === "akunRole"
+                          ? "active shadow-sm"
+                          : "text-secondary"
+                      }`}
+                      onClick={() => {
+                        setActiveTab("akunRole");
+                        setSearchQuery("");
+                      }}
+                    >
+                      <i className="bi bi-person-badge-fill"></i>
+                      <span>Akun & Role</span>
+                      <span className="badge bg-light text-dark rounded-pill">
+                        {accountsList.length}
+                      </span>
+                    </button>
+                  </li>
+                  <li className="nav-item flex-shrink-0">
+                    <button
+                      type="button"
+                      className={`nav-link py-2 text-nowrap d-flex align-items-center justify-content-center gap-2 ${
+                        activeTab === "konektivitas"
+                          ? "active shadow-sm"
+                          : "text-secondary"
+                      }`}
+                      onClick={() => {
+                        setActiveTab("konektivitas");
+                        setSearchQuery("");
+                        if (serviceStatus.backend.status === "idle") {
+                          handleCheckServicesConnectivity();
+                        }
+                      }}
+                    >
+                      <i className="bi bi-hdd-network-fill"></i>
+                      <span>Konektivitas & Server</span>
+                    </button>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -860,36 +1086,47 @@ export const Pengaturan = () => {
                         <i className="bi bi-people-fill me-2 text-primary"></i>
                         Daftar Personel Penembak
                       </h5>
-                      <div
-                        className="input-group input-group-sm"
-                        style={{ maxWidth: "260px" }}
-                      >
-                        <span className="input-group-text bg-body border-end-0 text-muted">
-                          <i className="bi bi-search"></i>
-                        </span>
-                        <input
-                          type="text"
-                          className="form-control border-start-0"
-                          placeholder="Cari nama/NRP..."
-                          value={searchPersonel}
-                          onChange={(e) => {
-                            setSearchPersonel(e.target.value);
-                            setPersonelPage(1);
-                          }}
-                        />
-                        {searchPersonel && (
-                          <button
-                            className="btn btn-outline-secondary"
-                            type="button"
-                            onClick={() => {
-                              setSearchPersonel("");
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-success d-flex align-items-center gap-1 shadow-sm"
+                          onClick={() => setShowImportPersonelModal(true)}
+                          title="Import data personel secara massal via file Excel"
+                        >
+                          <i className="bi bi-file-earmark-excel-fill text-success"></i>
+                          <span className="fw-semibold">Import Excel</span>
+                        </button>
+                        <div
+                          className="input-group input-group-sm"
+                          style={{ maxWidth: "230px" }}
+                        >
+                          <span className="input-group-text bg-body border-end-0 text-muted">
+                            <i className="bi bi-search"></i>
+                          </span>
+                          <input
+                            type="text"
+                            className="form-control border-start-0"
+                            placeholder="Cari nama/NRP..."
+                            value={searchPersonel}
+                            onChange={(e) => {
+                              setSearchPersonel(e.target.value);
                               setPersonelPage(1);
                             }}
-                            title="Reset Pencarian"
-                          >
-                            <i className="bi bi-x"></i>
-                          </button>
-                        )}
+                          />
+                          {searchPersonel && (
+                            <button
+                              className="btn btn-outline-secondary"
+                              type="button"
+                              onClick={() => {
+                                setSearchPersonel("");
+                                setPersonelPage(1);
+                              }}
+                              title="Reset Pencarian"
+                            >
+                              <i className="bi bi-x"></i>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="card-body p-3">
@@ -1082,11 +1319,19 @@ export const Pengaturan = () => {
                 </div>
                 <div className="col-12 col-lg-4">
                   <div className="card border-0 shadow-sm bg-body-tertiary">
-                    <div className="card-header bg-transparent border-0 pt-3 px-3">
+                    <div className="card-header bg-transparent border-0 pt-3 px-3 d-flex justify-content-between align-items-center">
                       <h5 className="fw-bold mb-0">
                         <i className="bi bi-person-plus-fill me-2 text-primary"></i>
                         Tambah Personel
                       </h5>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-link text-success text-decoration-none p-0 fw-semibold"
+                        onClick={() => setShowImportPersonelModal(true)}
+                        title="Import banyak data personel via Excel"
+                      >
+                        <i className="bi bi-file-earmark-excel me-1"></i> Via Excel
+                      </button>
                     </div>
                     <div className="card-body p-3">
                       <form onSubmit={handleAddPersonel}>
@@ -1165,6 +1410,21 @@ export const Pengaturan = () => {
                           )}
                         </button>
                       </form>
+
+                      {/* Opsi Tambah Banyak via Excel */}
+                      <div className="mt-3 pt-3 border-top text-center">
+                        <small className="text-secondary d-block mb-2">
+                          Punya daftar personel banyak dalam dokumen Excel?
+                        </small>
+                        <button
+                          type="button"
+                          className="btn btn-outline-success btn-sm w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm"
+                          onClick={() => setShowImportPersonelModal(true)}
+                        >
+                          <i className="bi bi-file-earmark-excel-fill"></i>
+                          <span>Bulk Insert via Excel (.xlsx)</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1832,7 +2092,518 @@ export const Pengaturan = () => {
                 </div>
               </div>
             )}
+
+            {/* ======================================================== */}
+            {/* TAB 7: AKUN & ROLE PENGGUNA (ADMINISTRATOR) */}
+            {/* ======================================================== */}
+            {activeTab === "akunRole" && (
+              <div className="row g-4">
+                <div className="col-12">
+                  <div className="card border-0 shadow-sm bg-body-tertiary">
+                    {/* Header Card */}
+                    <div className="card-header bg-transparent border-0 pt-3 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <div>
+                        <h5 className="fw-bold mb-0 d-flex align-items-center gap-2">
+                          <i className="bi bi-person-badge-fill text-primary"></i>
+                          Manajemen Akun & Otoritas Role Pengguna
+                        </h5>
+                        <small className="text-secondary">
+                          Kelola kredensial, hak akses peran, status akun, dan reset sandi pengguna di basis data PostgreSQL
+                        </small>
+                      </div>
+                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 shadow-sm"
+                          onClick={loadUsersFromDatabase}
+                          disabled={accountsLoading}
+                          title="Segarkan daftar akun dari PostgreSQL"
+                        >
+                          <i className={`bi bi-arrow-repeat ${accountsLoading ? "spin" : ""}`}></i>
+                          <span>Segarkan</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary d-flex align-items-center gap-1 shadow-sm fw-semibold"
+                          onClick={() => setShowTambahUserModal(true)}
+                          title="Tambah akun pengguna baru"
+                        >
+                          <i className="bi bi-person-plus-fill me-1"></i>
+                          <span>Tambah Akun Baru</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Toolbar Pencarian & Filter Role */}
+                    <div className="card-body p-3 pt-0">
+                      <div className="p-3 mb-3 rounded-3 bg-body border border-secondary border-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center gap-3">
+                        <div className="d-flex align-items-center gap-2 flex-wrap flex-grow-1">
+                          <div className="input-group input-group-sm" style={{ maxWidth: "320px" }}>
+                            <span className="input-group-text bg-body-tertiary text-muted">
+                              <i className="bi bi-search"></i>
+                            </span>
+                            <input
+                              type="text"
+                              className="form-control"
+                              placeholder="Cari nama, NRP, username..."
+                              value={searchAccountQuery}
+                              onChange={(e) => setSearchAccountQuery(e.target.value)}
+                            />
+                            {searchAccountQuery && (
+                              <button
+                                className="btn btn-outline-secondary"
+                                type="button"
+                                onClick={() => setSearchAccountQuery("")}
+                              >
+                                <i className="bi bi-x"></i>
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="d-flex align-items-center gap-1">
+                            <span className="small text-secondary me-1">Filter Role:</span>
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ width: "auto" }}
+                              value={filterRoleAccount}
+                              onChange={(e) => setFilterRoleAccount(e.target.value)}
+                            >
+                              <option value="semua">Semua Role</option>
+                              <option value={ROLES.OPERATOR}>Operator Latihan</option>
+                              <option value={ROLES.ADMINISTRATOR}>Administrator</option>
+                              <option value={ROLES.PELATIH}>Pelatih / Juri / Pimpinan</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Statistik Singkat */}
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <span className="badge bg-secondary-subtle text-secondary border">
+                            Total: <strong>{accountsList.length}</strong>
+                          </span>
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle">
+                            Operator: <strong>{accountsList.filter((a) => a.role === ROLES.OPERATOR).length}</strong>
+                          </span>
+                          <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                            Admin: <strong>{accountsList.filter((a) => a.role === ROLES.ADMINISTRATOR).length}</strong>
+                          </span>
+                          <span className="badge bg-success-subtle text-success border border-success-subtle">
+                            Pelatih: <strong>{accountsList.filter((a) => a.role === ROLES.PELATIH).length}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tabel Akun Pengguna */}
+                      <div className="table-responsive">
+                        <table className="table table-hover align-middle mb-0">
+                          <thead className="table-light">
+                            <tr>
+                              <th style={{ width: "60px" }}>ID</th>
+                              <th>Username</th>
+                              <th>Pangkat, Nama Lengkap</th>
+                              <th>NRP & Satuan</th>
+                              <th>Role & Wewenang</th>
+                              <th className="text-center">Status</th>
+                              <th>Login Terakhir</th>
+                              <th className="text-center" style={{ width: "130px" }}>Aksi</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {accountsLoading ? (
+                              <tr>
+                                <td colSpan="8" className="text-center py-4 text-muted">
+                                  <span
+                                    className="spinner-border spinner-border-sm text-primary me-2"
+                                    role="status"
+                                  ></span>
+                                  Memuat akun dari tabel users PostgreSQL...
+                                </td>
+                              </tr>
+                            ) : filteredAccountsList.length === 0 ? (
+                              <tr>
+                                <td colSpan="8" className="text-center py-4 text-muted">
+                                  <i className="bi bi-inbox fs-3 d-block mb-1 text-secondary opacity-50"></i>
+                                  Tidak ada akun pengguna yang cocok dengan kriteria pencarian.
+                                </td>
+                              </tr>
+                            ) : (
+                              filteredAccountsList.map((acc) => {
+                                const meta =
+                                  ROLE_METADATA[acc.role] || ROLE_METADATA[ROLES.OPERATOR];
+                                const isSelf =
+                                  getCurrentUser() &&
+                                  (String(getCurrentUser().id_user) === String(acc.id_user || acc.id) ||
+                                    String(getCurrentUser().id) === String(acc.id_user || acc.id));
+
+                                return (
+                                  <tr key={acc.id_user || acc.id || acc.username}>
+                                    <td className="text-secondary fw-bold">
+                                      #{acc.id_user || acc.id}
+                                    </td>
+                                    <td>
+                                      <code className="fw-bold text-primary fs-7">
+                                        {acc.username}
+                                      </code>
+                                      {isSelf && (
+                                        <span className="badge bg-info-subtle text-info ms-1" style={{ fontSize: "10px" }}>
+                                          Anda
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <div className="fw-semibold">
+                                        {acc.pangkat && acc.pangkat !== "-" ? `${acc.pangkat} ` : ""}
+                                        {acc.nama || acc.nama_lengkap}
+                                      </div>
+                                      <small className="text-secondary">
+                                        {acc.jabatan || "-"}
+                                      </small>
+                                    </td>
+                                    <td>
+                                      <div className="small fw-medium">
+                                        NRP: <span className="font-monospace">{acc.nrp || "-"}</span>
+                                      </div>
+                                      <small className="text-secondary">
+                                        {acc.satuan || "-"}
+                                      </small>
+                                    </td>
+                                    <td>
+                                      <span
+                                        className={`badge ${meta.badgeClass} d-inline-flex align-items-center gap-1 mb-1`}
+                                      >
+                                        <i className={meta.icon}></i>
+                                        {meta.label}
+                                      </span>
+                                      <div
+                                        className="text-secondary"
+                                        style={{ fontSize: "0.75rem", maxWidth: "240px" }}
+                                      >
+                                        {meta.description}
+                                      </div>
+                                    </td>
+                                    <td className="text-center">
+                                      <span
+                                        className={`badge ${
+                                          (acc.status || "Aktif").toLowerCase() === "aktif"
+                                            ? "bg-success-subtle text-success border border-success-subtle"
+                                            : "bg-secondary-subtle text-secondary border border-secondary-subtle"
+                                        }`}
+                                      >
+                                        {acc.status || "Aktif"}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <small className="text-secondary">
+                                        {acc.last_login
+                                          ? new Date(acc.last_login).toLocaleString("id-ID")
+                                          : "Belum pernah"}
+                                      </small>
+                                    </td>
+                                    <td className="text-center">
+                                      <div className="d-flex align-items-center justify-content-center gap-1">
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-primary py-1 px-2"
+                                          onClick={() => {
+                                            setSelectedEditUser(acc);
+                                            setShowEditUserModal(true);
+                                          }}
+                                          title="Ubah data profil / reset kata sandi"
+                                        >
+                                          <i className="bi bi-pencil-square me-1"></i>
+                                          Ubah
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-outline-danger py-1 px-2"
+                                          onClick={() =>
+                                            handleRemoveAccount(
+                                              acc.id_user || acc.id,
+                                              acc.nama || acc.nama_lengkap
+                                            )
+                                          }
+                                          disabled={isSelf}
+                                          title={
+                                            isSelf
+                                              ? "Akun Anda sendiri tidak dapat dihapus saat sedang login"
+                                              : "Hapus akun dari PostgreSQL"
+                                          }
+                                        >
+                                          <i className="bi bi-trash"></i>
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ======================================================== */}
+            {/* TAB 8: KONEKTIVITAS LAYANAN & SERVER (ADMINISTRATOR) */}
+            {/* ======================================================== */}
+            {activeTab === "konektivitas" && (
+              <div className="row g-4">
+                <div className="col-12 col-lg-8">
+                  <div className="card border-0 shadow-sm bg-body-tertiary h-100">
+                    <div className="card-header bg-transparent border-0 pt-3 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <div>
+                        <h5 className="fw-bold mb-0">
+                          <i className="bi bi-hdd-network-fill me-2 text-primary"></i>
+                          Status Konektivitas Layanan SITRAK
+                        </h5>
+                        <small className="text-secondary">
+                          Memeriksa ketersediaan layanan Backend Database, Computer Vision Server, dan AI Engine
+                        </small>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary d-flex align-items-center gap-1"
+                        onClick={handleCheckServicesConnectivity}
+                        disabled={serviceStatus.checking}
+                      >
+                        {serviceStatus.checking ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm"
+                              role="status"
+                            ></span>
+                            <span>Memeriksa...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="bi bi-arrow-repeat"></i>
+                            <span>Uji Konektivitas Sekarang</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="card-body p-3">
+                      <div className="d-flex flex-column gap-3">
+                        {/* 1. SITRAK-Backend Database API */}
+                        <div className="p-3 rounded-3 border bg-body d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                          <div>
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-database-fill-gear text-primary fs-5"></i>
+                              <span className="fw-bold">
+                                SITRAK-Backend API & Database
+                              </span>
+                            </div>
+                            <div className="small text-secondary mt-1">
+                              Endpoint: <code>{getBackendUrl()}</code>
+                            </div>
+                            <div className="small text-muted">
+                              {serviceStatus.backend.message}
+                            </div>
+                          </div>
+                          <div className="text-sm-end">
+                            <span
+                              className={`badge ${
+                                serviceStatus.backend.status === "online"
+                                  ? "bg-success"
+                                  : serviceStatus.backend.status === "offline"
+                                  ? "bg-danger"
+                                  : "bg-secondary"
+                              }`}
+                            >
+                              {serviceStatus.backend.status === "online"
+                                ? "TERHUBUNG"
+                                : serviceStatus.backend.status === "offline"
+                                ? "TERPUTUS"
+                                : "BELUM DICEK"}
+                            </span>
+                            {serviceStatus.backend.latencyMs !== null && (
+                              <div className="small text-secondary mt-1">
+                                Latensi: <strong>{serviceStatus.backend.latencyMs} ms</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 2. SITRAK-Detect CV Engine */}
+                        <div className="p-3 rounded-3 border bg-body d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                          <div>
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-cpu-fill text-info fs-5"></i>
+                              <span className="fw-bold">
+                                SITRAK-Detect Computer Vision Service
+                              </span>
+                            </div>
+                            <div className="small text-secondary mt-1">
+                              Endpoint: <code>{getDetectApiUrl()}</code>
+                            </div>
+                            <div className="small text-muted">
+                              {serviceStatus.detectCv.message}
+                            </div>
+                          </div>
+                          <div className="text-sm-end">
+                            <span
+                              className={`badge ${
+                                serviceStatus.detectCv.status === "online"
+                                  ? "bg-success"
+                                  : serviceStatus.detectCv.status === "offline"
+                                  ? "bg-danger"
+                                  : "bg-secondary"
+                              }`}
+                            >
+                              {serviceStatus.detectCv.status === "online"
+                                ? "TERHUBUNG"
+                                : serviceStatus.detectCv.status === "offline"
+                                ? "TERPUTUS"
+                                : "BELUM DICEK"}
+                            </span>
+                            {serviceStatus.detectCv.latencyMs !== null && (
+                              <div className="small text-secondary mt-1">
+                                Latensi: <strong>{serviceStatus.detectCv.latencyMs} ms</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 3. Google Gemini Vision AI */}
+                        <div className="p-3 rounded-3 border bg-body d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2">
+                          <div>
+                            <div className="d-flex align-items-center gap-2">
+                              <i className="bi bi-stars text-warning fs-5"></i>
+                              <span className="fw-bold">
+                                Google Gemini Vision AI (Cloud Detection)
+                              </span>
+                            </div>
+                            <div className="small text-muted mt-1">
+                              {serviceStatus.geminiAi.message}
+                            </div>
+                          </div>
+                          <div className="text-sm-end">
+                            <span
+                              className={`badge ${
+                                serviceStatus.geminiAi.status === "online" ||
+                                serviceStatus.geminiAi.status === "configured"
+                                  ? "bg-success"
+                                  : "bg-warning text-dark"
+                              }`}
+                            >
+                              {serviceStatus.geminiAi.status === "online" ||
+                              serviceStatus.geminiAi.status === "configured"
+                                ? "SIAP DIGUNAKAN"
+                                : "BELUM DIATUR"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {serviceStatus.lastCheckedAt && (
+                        <div className="small text-secondary mt-3 text-end">
+                          <i className="bi bi-clock me-1"></i>
+                          Pemeriksaan terakhir pukul {serviceStatus.lastCheckedAt}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-12 col-lg-4">
+                  <div className="card border-0 shadow-sm bg-body-tertiary h-100">
+                    <div className="card-header bg-transparent border-0 pt-3 px-3">
+                      <h5 className="fw-bold mb-0">
+                        <i className="bi bi-terminal-fill me-2 text-primary"></i>
+                        Koordinasi Pengelola Server
+                      </h5>
+                    </div>
+                    <div className="card-body p-3">
+                      <p className="small text-secondary">
+                        Informasi diagnostik konfigurasi di bawah ini dapat disalin oleh{" "}
+                        <strong>Administrator</strong> untuk berkoordinasi dengan tim pengelola server / jaringan:
+                      </p>
+                      <div className="p-2 rounded bg-dark text-light font-monospace small mb-3">
+                        <div>FRONTEND_HOST: {window.location.origin}</div>
+                        <div>BACKEND_API: {getBackendUrl()}</div>
+                        <div>DETECT_CV_API: {getDetectApiUrl()}</div>
+                        <div>
+                          GEMINI_KEY: {getGeminiApiKey() ? "CONFIGURED" : "MISSING"}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm w-100"
+                        onClick={() => {
+                          const diagText = [
+                            `[DIAGNOSTIK KONFIGURASI SERVER SITRAK]`,
+                            `Waktu: ${new Date().toLocaleString("id-ID")}`,
+                            `Frontend Origin: ${window.location.origin}`,
+                            `Backend API: ${getBackendUrl()} (${serviceStatus.backend.status})`,
+                            `Detect CV API: ${getDetectApiUrl()} (${serviceStatus.detectCv.status})`,
+                            `Gemini AI Key: ${getGeminiApiKey() ? "Configured" : "Missing"}`,
+                          ].join("\n");
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(diagText);
+                          }
+                          setAlertFeedback({
+                            type: "success",
+                            message:
+                              "Ringkasan diagnostik server berhasil disalin ke clipboard untuk koordinasi pengelola server.",
+                          });
+                        }}
+                      >
+                        <i className="bi bi-clipboard-check me-1"></i>
+                        Salin Ringkasan Diagnostik Server
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
+          {/* Modal Bulk Insert Personel via File Excel */}
+          <ModalImportExcelPersonel
+            show={showImportPersonelModal}
+            onHide={() => setShowImportPersonelModal(false)}
+            onImportSuccess={(summaryMsg) => {
+              setAlertFeedback({
+                type: "success",
+                message: summaryMsg,
+              });
+              getPersonel(1, personelLimit, searchPersonel);
+            }}
+          />
+
+          {/* Modal Tambah Akun Pengguna Baru (PostgreSQL) */}
+          <ModalTambahUser
+            show={showTambahUserModal}
+            onHide={() => setShowTambahUserModal(false)}
+            onUserAdded={(newAcc) => {
+              setAlertFeedback({
+                type: "success",
+                message: `Akun "${newAcc.nama}" (${newAcc.username}) berhasil disimpan ke database PostgreSQL.`,
+              });
+              loadUsersFromDatabase();
+            }}
+          />
+
+          {/* Modal Ubah Akun / Reset Password Pengguna (PostgreSQL) */}
+          <ModalEditUser
+            show={showEditUserModal}
+            user={selectedEditUser}
+            onHide={() => {
+              setShowEditUserModal(false);
+              setSelectedEditUser(null);
+            }}
+            onUserUpdated={(updAcc) => {
+              setAlertFeedback({
+                type: "success",
+                message: `Data akun "${updAcc.nama}" (${updAcc.username}) berhasil diperbarui di database PostgreSQL.`,
+              });
+              loadUsersFromDatabase();
+            }}
+          />
         </div>
       </div>
     </div>

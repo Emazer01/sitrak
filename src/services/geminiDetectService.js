@@ -3,6 +3,39 @@ import { getGeminiApiKey, getGeminiModel } from "./apiConfig";
 import { generateTacticalAdvice } from "./sitrakDetectService";
 
 /**
+ * Dedicated Axios Client untuk Google Gemini Cloud AI
+ * Diisolasi secara ketat agar tidak mewarisi Authorization Bearer header SITRAK (JWT backend),
+ * yang menyebabkan penolakan dari Google API:
+ * "API key for authentication is used with other authentication credentials. Expected only one form of authentication."
+ */
+const geminiClient = axios.create();
+
+// Bersihkan Authorization header dari defaults jika sempat terkloning dari global axios
+if (geminiClient.defaults && geminiClient.defaults.headers) {
+  if (geminiClient.defaults.headers.common) {
+    delete geminiClient.defaults.headers.common["Authorization"];
+    delete geminiClient.defaults.headers.common["authorization"];
+  }
+  delete geminiClient.defaults.headers["Authorization"];
+  delete geminiClient.defaults.headers["authorization"];
+}
+
+// Interceptor pencegah kebocoran kredensial pihak ketiga
+if (geminiClient.interceptors && geminiClient.interceptors.request && typeof geminiClient.interceptors.request.use === "function") {
+  geminiClient.interceptors.request.use((config) => {
+    if (config.headers) {
+      delete config.headers["Authorization"];
+      delete config.headers["authorization"];
+      if (config.headers.common) {
+        delete config.headers.common["Authorization"];
+        delete config.headers.common["authorization"];
+      }
+    }
+    return config;
+  });
+}
+
+/**
  * Peta terjemahan directional bias dari Computer Vision / Gemini ke Bahasa Indonesia
  */
 const BIAS_TRANSLATION_MAP = {
@@ -324,11 +357,29 @@ const callGeminiGenerateContent = async (apiKey, modelName, base64Data, mimeType
   const quota = metadata.jumlahPeluru || 10;
   const targetType = metadata.tipeTarget || "issf_standard_10_ring";
 
-  const systemPrompt = `You are a world-class ballistic analyst and computer vision specialist for the Indonesian Military / ISSF shooting target scoring system (SITRAK-AI).
+  const systemPrompt = `You are an elite ballistic analyst and computer vision specialist for the Indonesian Military / ISSF shooting target scoring system (SITRAK-AI).
 
 TASK:
 Analyze the provided shooting target photo with extreme precision.
-Detect all bullet hole punctures, hits, or shot perforations made by projectiles on the target paper.
+Detect ONLY real, authentic, fresh bullet holes made during the current shooting session.
+DO NOT detect target repair patches (tambalan / stiker penutup sasaran tembak / pasters / black repair tape)!
+
+CRITICAL BALLISTIC DISCRIMINATION RULES:
+1. REAL BULLET HOLE (LUBANG TEMBAKAN ASLI):
+   - A physical bullet perforation / penetration that punched THROUGH the paper target.
+   - Characterized by distinct RAGGED, SHREDDED, TORN PAPER FIBERS (serabut kertas sobek / pecah berwarna putih atau abu-abu terang) ringing around the dark punctured cavity.
+   - Shows physical depth, 3D penetration characteristics, and light reflections on frayed torn paper edges.
+   - In black scoring rings (zones 7-10), fresh bullet holes stand out clearly due to the frayed, jagged, whitish/grey paper fiber edges around the dark hole!
+
+2. TAMBALAN (TARGET REPAIR PATCH / PASCHERS / STIKER PENUTUP / LAKBAN HITAM):
+   - A flat paper sticker, adhesive patch, or tape applied over an old hole from a previous session.
+   - Visual characteristics:
+     * Surface is FLAT, smooth, or matte paper pasted onto the target sheet.
+     * Often has rounded, oval, or squared smooth sticker contours.
+     * CRITICAL: An intact patch has NO torn/frayed white paper fiber halo or 3D penetration rim piercing through it!
+     * Look closely at the black bullseye area (e.g. around zone 7-8 top / top-right / sides): there may be circular/irregular adhesive patches/tambalan covering old hits.
+     * THESE TAMBALAN ARE INACTIVE REPAIR STICKERS AND MUST BE STRICTLY EXCLUDED AND NEVER COUNTED AS SHOTS!
+   - EXCEPTION: Only count a patched area if a NEW bullet has visibly shot THROUGH the patch (leaving a fresh, ragged, pierced hole with shredded fiber rims). If the patch is intact and covering a hole, IGNORE IT COMPLETELY.
 
 TARGET GEOMETRY & COORDINATES:
 1. The target is a concentric circular target (e.g. ${targetType}, typically with black center circles for zones 7-10 or 8-10, and white outer rings 1-6).
@@ -356,6 +407,7 @@ The JSON must adhere to this exact structure:
 {
   "target_detected": true,
   "shots_count": 10,
+  "patches_detected_count": 2,
   "shots": [
     {
       "id": 1,
@@ -364,7 +416,16 @@ The JSON must adhere to this exact structure:
       "score": 10,
       "decimal_score": 10.5,
       "distance_from_center_mm": 3.4,
-      "confidence": 0.96
+      "confidence": 0.96,
+      "visual_evidence": "Lubang tembakan asli dengan serabut sobek putih"
+    }
+  ],
+  "patches_excluded": [
+    {
+      "location": "Zona 7/8 atas",
+      "x": 49.5,
+      "y": 42.1,
+      "reason": "Stiker tambalan penutup lubang lama, permukaan rata tanpa serabut sobek"
     }
   ],
   "total_score": 96,
@@ -401,7 +462,7 @@ The JSON must adhere to this exact structure:
     },
   };
 
-  const response = await axios.post(url, requestBody, {
+  const response = await geminiClient.post(url, requestBody, {
     headers: {
       "Content-Type": "application/json",
     },
@@ -465,9 +526,8 @@ export const detectTargetViaGemini = async (
   const preferredModel = getGeminiModel();
   const modelsToTry = [
     preferredModel,
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
     "gemini-3.8-flash",
   ].filter((v, i, a) => a.indexOf(v) === i && Boolean(v));
 
@@ -538,6 +598,7 @@ export const detectTargetViaGemini = async (
       is_bullseye: scoreVal === 10,
       distance_mm: Number(distMm.toFixed(1)),
       confidence: typeof s.confidence === "number" ? s.confidence : 0.95,
+      visual_evidence: s.visual_evidence || null,
     };
   });
 
@@ -603,6 +664,15 @@ export const detectTargetViaGemini = async (
     total_score: totalScore,
     max_score: maxScore,
     shots_detected: normalizedShots.length,
+    patches_detected_count:
+      typeof rawGeminiResult.patches_detected_count === "number"
+        ? rawGeminiResult.patches_detected_count
+        : Array.isArray(rawGeminiResult.patches_excluded)
+        ? rawGeminiResult.patches_excluded.length
+        : 0,
+    patches_excluded: Array.isArray(rawGeminiResult.patches_excluded)
+      ? rawGeminiResult.patches_excluded
+      : [],
     average_score:
       normalizedShots.length > 0
         ? Number((totalScore / normalizedShots.length).toFixed(1))
@@ -645,7 +715,7 @@ export const detectTargetViaGemini = async (
  * @returns {Promise<{ valid: boolean, message: string, models?: string[] }>}
  */
 export const testGeminiApiKey = async (apiKey = null) => {
-  const key = (apiKey || getGeminiApiKey() || "").trim();
+  const key = (apiKey !== null && apiKey !== undefined ? apiKey : getGeminiApiKey() || "").trim();
   if (!key) {
     return {
       valid: false,
@@ -657,7 +727,12 @@ export const testGeminiApiKey = async (apiKey = null) => {
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(
       key
     )}`;
-    const res = await axios.get(url, { timeout: 8000 });
+    const res = await geminiClient.get(url, {
+      timeout: 8000,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
     const models = res.data?.models || [];
     return {
       valid: true,
