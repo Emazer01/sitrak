@@ -851,6 +851,12 @@ export const ModalUploadTargetDetect = ({
           nomorBabak: currentBabak?.nomor_babak || 1,
           jumlahPeluru: currentBabak?.jumlah_peluru || 10,
           engine: selectedEngine,
+          modelSenjata: sesiData?.model_senjata,
+          jenisSenjata: sesiData?.nama_jenis_senjata || sesiData?.jenis_senjata,
+          pabrikan: sesiData?.pabrikan,
+          sikapMenembak:
+            sesiData?.nama_sikap_menembak || sesiData?.sikap_menembak,
+          jarakMeter: sesiData?.jarak_meter,
         },
         effectiveUrl
       );
@@ -1033,6 +1039,29 @@ export const ModalUploadTargetDetect = ({
                     <strong>
                       {(currentBabak.jumlah_peluru || 10) * 10} Poin
                     </strong>
+                  </div>
+                  <div className="d-flex flex-wrap align-items-center gap-1 mt-1">
+                    <span className="badge bg-primary-subtle text-primary border">
+                      <i className="bi bi-crosshair me-1"></i>
+                      {sesiData?.model_senjata || "Senjata"} ({caliberMm}mm)
+                    </span>
+                    {(sesiData?.nama_jenis_senjata || sesiData?.jenis_senjata) && (
+                      <span className="badge bg-info-subtle text-info border">
+                        {sesiData?.nama_jenis_senjata || sesiData?.jenis_senjata}
+                      </span>
+                    )}
+                    {(sesiData?.nama_sikap_menembak || sesiData?.sikap_menembak) && (
+                      <span className="badge bg-secondary-subtle text-secondary border">
+                        <i className="bi bi-person-standing me-1"></i>
+                        {sesiData?.nama_sikap_menembak || sesiData?.sikap_menembak}
+                      </span>
+                    )}
+                    {sesiData?.jarak_meter && (
+                      <span className="badge bg-dark-subtle text-dark border">
+                        <i className="bi bi-rulers me-1"></i>
+                        {sesiData?.jarak_meter} m
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
@@ -2325,20 +2354,75 @@ export const ModalUploadTargetDetect = ({
                   {/* Evaluasi Balistik & Saran Taktis Instruktur */}
                   <div className="col-12 col-lg-6">
                     <div className="card border p-3 bg-body mb-3">
-                      <h6 className="fw-bold mb-2 text-primary d-flex align-items-center gap-2">
-                        <i className="bi bi-lightbulb-fill text-warning"></i>
-                        Saran & Rekomendasi Taktis Koreksi Menembak:
-                      </h6>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <h6 className="fw-bold mb-0 text-primary d-flex align-items-center gap-2">
+                          <i className="bi bi-lightbulb-fill text-warning"></i>
+                          Saran & Rekomendasi Taktis Koreksi Menembak:
+                        </h6>
+                        {sesiData?.model_senjata && (
+                          <span
+                            className="badge bg-primary-subtle text-primary border"
+                            style={{ fontSize: "10.5px" }}
+                          >
+                            <i className="bi bi-crosshair me-1"></i>
+                            {sesiData.model_senjata}
+                          </span>
+                        )}
+                      </div>
                       <p className="small text-secondary mb-2">
                         {analysisResult.analisa_sebaran}
                       </p>
-                      <ul className="mb-0 ps-3 small text-dark">
-                        {analysisResult.saran.map((item, idx) => (
-                          <li key={idx} className="mb-1">
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="d-flex flex-column gap-2">
+                        {analysisResult.saran.map((item, idx) => {
+                          const isWeaponNote = item.toLowerCase().includes("catatan khusus senjata");
+                          const isRemedial = item.toLowerCase().includes("latihan remedial");
+                          const isStance = item.toLowerCase().includes("optimasi sikap");
+                          const isGrouping = item.toLowerCase().includes("evaluasi kerapatan") || item.toLowerCase().includes("konsistensi");
+
+                          let badgeClass = "bg-warning-subtle text-warning-emphasis border-warning-subtle";
+                          let iconClass = "bi-exclamation-triangle-fill text-warning";
+                          let categoryTitle = "Koreksi Biomekanika";
+
+                          if (isWeaponNote) {
+                            badgeClass = "bg-primary-subtle text-primary border-primary-subtle";
+                            iconClass = "bi-crosshair text-primary";
+                            categoryTitle = "Koreksi Spesifik Senjata";
+                          } else if (isRemedial) {
+                            badgeClass = "bg-success-subtle text-success-emphasis border-success-subtle";
+                            iconClass = "bi-award-fill text-success";
+                            categoryTitle = "Latihan Remedial (Drill)";
+                          } else if (isStance) {
+                            badgeClass = "bg-info-subtle text-info-emphasis border-info-subtle";
+                            iconClass = "bi-person-standing text-info";
+                            categoryTitle = "Optimasi Sikap Menembak";
+                          } else if (isGrouping) {
+                            badgeClass = "bg-secondary-subtle text-secondary-emphasis border-secondary-subtle";
+                            iconClass = "bi-bullseye text-secondary";
+                            categoryTitle = "Evaluasi Sebaran";
+                          }
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`p-2 rounded border small ${
+                                isWeaponNote
+                                  ? "bg-primary-subtle bg-opacity-10"
+                                  : isRemedial
+                                  ? "bg-success-subtle bg-opacity-10"
+                                  : "bg-light-subtle"
+                              }`}
+                            >
+                              <div className="d-flex align-items-center gap-1 mb-1">
+                                <i className={`bi ${iconClass} me-1`}></i>
+                                <span className={`badge ${badgeClass}`} style={{ fontSize: "10px" }}>
+                                  {categoryTitle}
+                                </span>
+                              </div>
+                              <div className="text-body ms-1">{item}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Tabel Rincian Tembakan */}

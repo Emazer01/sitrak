@@ -47,91 +47,249 @@ const BIAS_TRANSLATION_MAP = {
 /**
  * Menghasilkan saran & rekomendasi taktis pelatih berdasarkan analisis balistik
  */
-export const generateTacticalAdvice = (biasKey, groupingDiameterMm, accuracy) => {
+/**
+ * Mengidentifikasi kategori senjata dari nama/model/jenis/kaliber
+ */
+export const resolveWeaponCategory = (weaponInfo) => {
+  if (!weaponInfo) return "senapan_serbu";
+  let combined = "";
+  let cal = 0;
+
+  if (typeof weaponInfo === "string") {
+    combined = weaponInfo.toLowerCase();
+  } else if (typeof weaponInfo === "object") {
+    combined = `${weaponInfo.model_senjata || weaponInfo.nama_senjata || ""} ${
+      weaponInfo.nama_jenis_senjata || weaponInfo.jenis_senjata || ""
+    } ${weaponInfo.pabrikan || ""}`.toLowerCase();
+    cal = parseFloat(weaponInfo.kaliber || 0);
+  }
+
+  if (
+    combined.includes("sniper") ||
+    combined.includes("spr") ||
+    combined.includes("runduk") ||
+    combined.includes("dmr") ||
+    combined.includes("awp") ||
+    combined.includes("remington")
+  ) {
+    return "sniper";
+  }
+  if (
+    combined.includes("pm2") ||
+    combined.includes("mp5") ||
+    combined.includes("smg") ||
+    combined.includes("submachine")
+  ) {
+    return "smg";
+  }
+  if (
+    combined.includes("pistol") ||
+    combined.includes("g2") ||
+    combined.includes("glock") ||
+    combined.includes("sig") ||
+    combined.includes("revolver") ||
+    combined.includes("beretta") ||
+    combined.includes("colt") ||
+    combined.includes("makarov") ||
+    combined.includes("hs9")
+  ) {
+    return "pistol";
+  }
+  if (
+    combined.includes("senapan") ||
+    combined.includes("ss1") ||
+    combined.includes("ss2") ||
+    combined.includes("m16") ||
+    combined.includes("m4") ||
+    combined.includes("ak47") ||
+    combined.includes("ak-") ||
+    combined.includes("serbu") ||
+    combined.includes("aug") ||
+    combined.includes("steyr")
+  ) {
+    return "senapan_serbu";
+  }
+  if (cal >= 8.5 && cal <= 11.5) return "pistol";
+  if (cal >= 5.0 && cal <= 7.7) return "senapan_serbu";
+  if (cal <= 4.6 && cal > 0) return "senapan_angin";
+
+  return "senapan_serbu";
+};
+
+/**
+ * Menghasilkan saran & rekomendasi taktis pelatih berdasarkan analisis balistik,
+ * spesifikasi senjata yang digunakan, dan sikap menembak.
+ *
+ * @param {string} biasKey - Arah kecenderungan perkenaan (e.g. "bottom-left", "centered")
+ * @param {number} groupingDiameterMm - Diameter sebaran tembakan dalam mm
+ * @param {number} accuracy - Persentase akurasi tembakan (0-100)
+ * @param {Object|string} [weaponInfo] - Informasi senjata (model, jenis, pabrikan, kaliber)
+ * @param {string} [stance] - Sikap menembak (Berdiri, Tiarap, Berlutut)
+ * @returns {string[]} Daftar saran taktis komprehensif
+ */
+export const generateTacticalAdvice = (
+  biasKey,
+  groupingDiameterMm,
+  accuracy,
+  weaponInfo = null,
+  stance = null
+) => {
   const normalizedBias = (biasKey || "").toLowerCase().trim();
+  const category = resolveWeaponCategory(weaponInfo);
+  const weaponLabel =
+    typeof weaponInfo === "string"
+      ? weaponInfo
+      : weaponInfo?.model_senjata || weaponInfo?.nama_jenis_senjata || "Senjata";
+  const stanceStr = (stance || "").toLowerCase();
   const saranList = [];
 
+  // 1. Koreksi Biomekanika & Penyimpangan Arah (Directional Bias)
   switch (normalizedBias) {
     case "bottom-left":
     case "condong ke kiri bawah":
       saranList.push(
-        "Koreksi Penarikan Picu (Trigger Jerking): Tarik pelatuk secara perlahan lurus ke belakang menggunakan ruas pertama jari telunjuk tanpa menyentak."
+        "Koreksi Penarikan Picu (Trigger Jerking / Flinching): Titik perkenaan kiri bawah menandakan sentakan pelatuk mendadak dan pengetatan jari mendadak sesaat sebelum tembakan meletus. Tarik pelatuk secara halus lurus ke belakang menggunakan bantalan ruas pertama jari telunjuk."
       );
       saranList.push(
-        "Stabilisasi Genggaman: Hindari meremas grip pistol/senapan terlalu kuat saat picu ditekan."
-      );
-      saranList.push(
-        "Pengaturan Napas: Tahan napas pada jeda alami sebelum melepas tembakan."
+        "Stabilisasi Cengkeraman (Grip Pressure): Hindari meremas pegangan (milking grip) saat jari telunjuk menekan pelatuk. Pertahankan tekanan genggaman tetap konstan dan rileks."
       );
       break;
     case "bottom-right":
     case "condong ke kanan bawah":
       saranList.push(
-        "Koreksi Penekanan Jari (Thumbing): Hindari tekanan ibu jari berlebih pada sisi pegangan saat menekan picu."
+        "Koreksi Tekanan Ibu Jari (Thumbing) & Pergelangan: Hindari tekanan lateral berlebih ibu jari kanan pada frame senjata dan jaga pergelangan tangan agar tidak menurun (breaking wrist down) sesaat sebelum tembakan meletus."
       );
       saranList.push(
-        "Koreksi Pergelangan Tangan: Kunci pergelangan tangan agar tidak menurun (breaking wrist down) sesaat sebelum tembakan meletus."
+        "Kunci Sendi Pergelangan: Kunci sendi pergelangan tangan penembak pada posisi netral dan kokoh agar tidak mengendur di bawah gaya dorong proyektil."
       );
       break;
     case "top-left":
     case "condong ke kiri atas":
       saranList.push(
-        "Antisipasi Hentakan (Pushing / Recoil Anticipation): Hindari mendorong senjata ke depan atau mengangkat moncong saat menembak."
+        "Antisipasi Hentakan (Pushing / Recoil Anticipation): Hindari mendorong moncong senjata ke depan atau mengangkat bahu kiri sebelum letupan untuk melawan hentakan."
       );
       saranList.push(
-        "Koreksi Pejera (Sight Alignment): Pastikan pejera depan sejajar rata dengan celah pejera belakang."
+        "Koreksi Pejera (Sight Alignment): Pastikan bilah pejera depan sejajar rata dengan celah pejera belakang tanpa mencuat miring ke kiri atas."
       );
       break;
     case "top-right":
     case "condong ke kanan atas":
       saranList.push(
-        "Koreksi Tumit Telapak Tangan (Heeling): Jangan menekan bagian bawah pegangan ke depan saat hentakan."
+        "Koreksi Tumit Telapak Tangan (Heeling): Jangan menekan bagian bawah pegangan (tumit telapak tangan) ke depan saat hentakan diantisipasi."
       );
       saranList.push(
-        "Relaksasi Bahu: Turunkan ketegangan bahu penembak untuk menjaga kestabilan poros bidik."
+        "Relaksasi Bahu: Turunkan ketegangan pundak penembak; biarkan sistem rangka menyerap dorongan recoil secara alami."
       );
       break;
     case "left":
     case "condong ke kiri":
       saranList.push(
-        "Posisi Jari pada Picu: Masukkan atau keluarkan jari telunjuk sedikit agar tarikan picu benar-benar lurus 90 derajat."
+        "Posisi Jari pada Picu: Penempatan jari terlalu dangkal (hanya di ujung kuku). Masukkan jari telunjuk hingga tengah bantalan ruas pertama tegak lurus 90 derajat terhadap picu."
+      );
+      saranList.push(
+        "Pemeriksaan Kemiringan Senjata (Canting): Jaga senjata tegak lurus; kemiringan beberapa derajat ke kiri menggeser lintasan balistik ke arah kiri."
       );
       break;
     case "right":
     case "condong ke kanan":
       saranList.push(
-        "Tekanan Jari Kanan: Kurangi tekanan jari tengah, manis, dan kelingking pada rangka senjata."
+        "Tekanan Penarikan Samping (Trigger Snatching): Jari telunjuk terlalu dalam masuk ke rumah picu (hingga lipatan sendi kedua). Tarik picu benar-benar linier ke belakang."
+      );
+      saranList.push(
+        "Relaksasi Jari Pendukung: Kurangi tekanan jari tengah, manis, dan kelingking pada rangka senjata agar tidak memuntir sumbu laras ke kanan."
       );
       break;
     case "top":
     case "condong ke atas":
       saranList.push(
-        "Koreksi Pejera: Pejera depan terlalu naik di atas celah pejera belakang, turunkan bidikan pejera."
+        "Koreksi Pejera (High Sight Picture): Pejera depan terlalu naik di atas celah pejera belakang. Turunkan bidikan pejera agar sejajar rata."
+      );
+      saranList.push(
+        "Pengaturan Ritme Napas: Tembakan dilepas pada jeda ekspirasi alami (natural respiratory pause) setelah menghembuskan napas secara tenang."
       );
       break;
     case "bottom":
     case "condong ke bawah":
       saranList.push(
-        "Koreksi Menurunkan Moncong: Jangan menundukkan moncong senjata sesaat sebelum meletus."
+        "Koreksi Penurunan Moncong (Dropping Muzzle): Moncong senjata turun sebelum peluru lepas akibat hilangnya fokus bidik atau tergesa-gesa melihat sasaran."
+      );
+      saranList.push(
+        "Lanjutan Bidikan (Follow-Through): Tahan bidikan dan tekanan picu selama 1 detik setelah letusan sebelum menurunkan senjata."
       );
       break;
     default:
       saranList.push(
-        "Pertahankan Ritme & Konsistensi: Titik bidik dan perkenaan sudah stabil di sektor pusat sasaran."
+        "Pertahankan Ritme & Konsistensi Presisi: Titik bidik dan perkenaan sudah stabil mengunci sektor pusat bullseye sasaran."
       );
       saranList.push(
-        "Tingkatkan kecepatan transisi bidikan dengan tetap menjaga kerapatan grouping."
+        "Tingkatkan kecepatan transisi dan cadence tembakan berikutnya dengan tetap menjaga kerapatan grouping."
       );
       break;
   }
 
+  // 2. Koreksi Khusus Berdasarkan Senjata yang Digunakan
+  if (category === "pistol") {
+    saranList.push(
+      `Catatan Khusus Senjata [${weaponLabel}]: Pada pistol (sight radius pendek), deviasi 1 mm pada pejera mengakibatkan pergeseran besar di lesan. Terapkan proporsi cengkeraman 60-70% tangan penopang (tangan kiri) dan 30-40% tangan penembak. Manfaatkan trigger reset point tanpa melepas picu ke depan sepenuhnya untuk tembakan cepat berturut-turut.`
+    );
+  } else if (category === "senapan_serbu") {
+    saranList.push(
+      `Catatan Khusus Senjata [${weaponLabel}]: Pastikan penempatan pipi pada popor (cheek weld) selalu di titik yang identik untuk menjamin keselarasan eye-relief. Tanamkan popor senapan secara rapat di lekukan bahu (shoulder pocket) untuk meredam recoil kaliber 5.56mm/7.62mm secara simetris, dan tahan handguard tanpa menekan kotak magasen.`
+    );
+  } else if (category === "sniper") {
+    saranList.push(
+      `Catatan Khusus Senjata [${weaponLabel}]: Hilangkan kesalahan paralaks teleskop optik (pastikan tidak ada bayangan gelap di tepi lensa optik). Gunakan Natural Point of Aim (NPOA) dengan menyetel sandaran bipod/monopod agar senapan mengarah ke target tanpa paksaan otot.`
+    );
+  } else if (category === "smg") {
+    saranList.push(
+      `Catatan Khusus Senjata [${weaponLabel}]: Pastikan popor terentang terkunci sempurna pada bahu penembak. Kendalikan muzzle climb yang cepat pada tembakan berturutan dengan tekanan stabil ke bawah pada handguard depan.`
+    );
+  } else if (category === "senapan_angin") {
+    saranList.push(
+      `Catatan Khusus Senjata [${weaponLabel}]: Proyektil memiliki waktu lintas laras lebih lambat; terapkan follow-through yang lebih lama dan rileks tanpa sentakan buatan.`
+    );
+  }
+
+  // 3. Panduan Spesifik Sikap Menembak (Stance)
+  if (stanceStr.includes("tiarap") || stanceStr.includes("prone")) {
+    saranList.push(
+      "Optimasi Sikap Tiarap (Prone): Siku kedua tangan wajib membentuk segitiga piramida tumpuan yang kokoh pada matras. Gunakan pernapasan diafragma perut agar rongga dada tidak mengangkat moncong senapan saat membidik."
+    );
+  } else if (stanceStr.includes("berlutut") || stanceStr.includes("kneeling")) {
+    saranList.push(
+      "Optimasi Sikap Berlutut (Kneeling): Pastikan siku tangan penopang bertumpu tepat di depan tempurung lutut kiri (bukan tulang ketemu tulang) untuk menghindari slip mikro saat picu ditekan."
+    );
+  } else if (stanceStr.includes("berdiri") || stanceStr.includes("standing")) {
+    saranList.push(
+      "Optimasi Sikap Berdiri (Standing): Buka kaki selebar bahu dengan condong badan agresif ke depan (athletic forward lean). Jangan melawan goyangan alami tubuh secara kaku; tarik picu bertahap saat lesan berada di zona goyangan terkecil."
+    );
+  }
+
+  // 4. Evaluasi Kerapatan Grouping
   if (groupingDiameterMm > 60) {
     saranList.push(
-      "Evaluasi Kerapatan: Sebaran tembakan masih cukup lebar (>60mm). Fokuskan latihan pada penembakan lambat presisi (slow fire)."
+      `Evaluasi Kerapatan (Grouping ${groupingDiameterMm} mm): Sebaran tembakan masih cukup lebar. Prioritaskan latihan penembakan lambat terukur (slow fire) untuk memantapkan konsistensi mekanika tubuh penembak.`
     );
   } else if (groupingDiameterMm <= 35) {
     saranList.push(
-      "Konsistensi Sangat Baik: Kelompok tembakan sangat rapat, pertahankan posisi penembakan yang sama."
+      `Konsistensi Sangat Baik (Grouping ${groupingDiameterMm} mm): Kelompok tembakan sangat rapat, pertahankan posisi penembakan yang sama.`
+    );
+  }
+
+  // 5. Rekomendasi Latihan Remedial (Drill)
+  if (category === "pistol") {
+    if (["bottom-left", "bottom", "bottom-right"].includes(normalizedBias)) {
+      saranList.push(
+        "Latihan Remedial yang Direkomendasikan: 'Ball & Dummy Drill' (campurkan peluru hampa/dummy secara acak di magasen) untuk melatih penembak agar tidak tersentak saat picu meletus, serta 'Wall Drill' (dry fire menempel di dinding)."
+      );
+    } else {
+      saranList.push(
+        "Latihan Remedial yang Direkomendasikan: 'Coin Drill on Front Sight' (letakkan koin di atas pejera depan saat latihan kering; koin tidak boleh jatuh saat picu ditekan)."
+      );
+    }
+  } else if (category === "senapan_serbu" || category === "sniper") {
+    saranList.push(
+      "Latihan Remedial yang Direkomendasikan: 'Dry-Fire Reset Cadence Drill' (latihan kering fokus pada mendengar bunyi klik reset pelatuk tanpa merusak posisi cheek-weld dan gambar bidik di sasaran)."
     );
   }
 
@@ -418,6 +576,28 @@ export const detectTargetViaUpload = async (
     formData.append("engine", String(metadata.engine));
   }
 
+  const weaponModel =
+    metadata.modelSenjata || metadata.model_senjata || metadata.weapon_name || "";
+  const weaponKind =
+    metadata.jenisSenjata ||
+    metadata.nama_jenis_senjata ||
+    metadata.jenis_senjata ||
+    metadata.weapon_type ||
+    "";
+  const stanceVal =
+    metadata.sikapMenembak ||
+    metadata.nama_sikap_menembak ||
+    metadata.sikap_menembak ||
+    metadata.stance ||
+    "";
+  const distanceVal =
+    metadata.jarakMeter || metadata.jarak_meter || metadata.distance || "";
+
+  if (weaponModel) formData.append("weapon_name", weaponModel);
+  if (weaponKind) formData.append("weapon_type", weaponKind);
+  if (stanceVal) formData.append("shooting_stance", stanceVal);
+  if (distanceVal) formData.append("distance_m", String(distanceVal));
+
   try {
     const response = await axios.post(
       `${baseUrl}/api/v1/detect/upload`,
@@ -501,12 +681,24 @@ export const detectTargetViaUpload = async (
         ? "Cukup"
         : "Perlu Pembinaan";
 
-    // Rekomendasi & saran instruktur
-    const saranList = generateTacticalAdvice(
-      rawBias,
-      groupingDiameterMm,
-      accuracyPercent
-    );
+    // Rekomendasi & saran instruktur (prioritaskan hasil analitik AI/CV backend)
+    let saranList = [];
+    if (Array.isArray(data.tactical_advice) && data.tactical_advice.length > 0) {
+      saranList = data.tactical_advice;
+    } else {
+      saranList = generateTacticalAdvice(
+        rawBias,
+        groupingDiameterMm,
+        accuracyPercent,
+        {
+          model_senjata: weaponModel,
+          nama_jenis_senjata: weaponKind,
+          kaliber: metadata.kaliber,
+          pabrikan: metadata.pabrikan,
+        },
+        stanceVal
+      );
+    }
 
     // URL gambar beranotasi lengkap
     let annotatedImageUrl = "";
@@ -541,9 +733,11 @@ export const detectTargetViaUpload = async (
           : groupingDiameterMm <= 50
           ? "Cukup Rapat (Sedang)"
           : "Menyebar Luas (Perlu Pembinaan)",
-      analisa_sebaran: `Perkenaan terdeteksi sebanyak ${
-        data.shots_count || normalizedShots.length
-      } butir dengan dispersi ${groupingDiameterMm} mm dan bias ${directionalBias}.`,
+      analisa_sebaran:
+        data.analysis_summary ||
+        `Perkenaan terdeteksi sebanyak ${
+          data.shots_count || normalizedShots.length
+        } butir dengan dispersi ${groupingDiameterMm} mm dan bias ${directionalBias}.`,
       saran: saranList,
       rekomendasi_utama: saranList[0] || "Pertahankan ritme penembakan.",
       shots: normalizedShots,
@@ -604,7 +798,7 @@ export const parseCatatanAnalisis = (raw) => {
     lines.forEach((line) => {
       // Pisahkan jika ada array yang tergabung koma tanpa spasi
       const subSegments = line.split(
-        /,(?=[A-Z][a-z]+|\b(?:Koreksi|Relaksasi|Evaluasi|Pertahankan|Antisipasi|Posisi|Tekanan)\b)/
+        /,(?=[A-Z][a-z]+|\b(?:Koreksi|Relaksasi|Evaluasi|Pertahankan|Antisipasi|Posisi|Tekanan|Catatan|Optimasi|Latihan|Konsistensi|Stabilisasi|Penyelarasan|Pengaturan)\b)/
       );
       subSegments.forEach((sub) => {
         const clean = sub

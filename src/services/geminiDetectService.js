@@ -356,13 +356,38 @@ const callGeminiGenerateContent = async (apiKey, modelName, base64Data, mimeType
   const caliber = metadata.kaliber || 4.5;
   const quota = metadata.jumlahPeluru || 10;
   const targetType = metadata.tipeTarget || "issf_standard_10_ring";
+  const weaponModel =
+    metadata.modelSenjata || metadata.model_senjata || metadata.weapon_name || "Senjata Api / Standar";
+  const weaponKind =
+    metadata.jenisSenjata ||
+    metadata.nama_jenis_senjata ||
+    metadata.jenis_senjata ||
+    metadata.weapon_type ||
+    "Standar";
+  const weaponManufacturer = metadata.pabrikan || "";
+  const stance =
+    metadata.sikapMenembak ||
+    metadata.nama_sikap_menembak ||
+    metadata.sikap_menembak ||
+    metadata.stance ||
+    "Standar (Berdiri/Tiarap)";
+  const distance =
+    metadata.jarakMeter || metadata.jarak_meter || metadata.distance || "Standar";
 
-  const systemPrompt = `You are an elite ballistic analyst and computer vision specialist for the Indonesian Military / ISSF shooting target scoring system (SITRAK-AI).
+  const systemPrompt = `You are an elite ballistic analyst, military shooting coach, and computer vision specialist for the Indonesian Military / ISSF shooting target scoring system (SITRAK-AI).
 
 TASK:
 Analyze the provided shooting target photo with extreme precision.
 Detect ONLY real, authentic, fresh bullet holes made during the current shooting session.
 DO NOT detect target repair patches (tambalan / stiker penutup sasaran tembak / pasters / black repair tape)!
+
+SESSION, WEAPON & BALLISTIC CONTEXT:
+- Model Senjata: ${weaponModel} ${weaponManufacturer ? `(${weaponManufacturer})` : ""}
+- Kategori Senjata: ${weaponKind}
+- Kaliber Proyektil: ${caliber} mm
+- Sikap / Posisi Menembak: ${stance}
+- Jarak Tembak: ${distance} meter
+- Alokasi Kuota Babak: ${quota} butir
 
 CRITICAL BALLISTIC DISCRIMINATION RULES:
 1. REAL BULLET HOLE (LUBANG TEMBAKAN ASLI):
@@ -395,11 +420,21 @@ SCORING RULES (ISSF INWARD-GAUGING):
 - Missing target / completely outside ring 1 = 0.
 - Caliber: ${caliber} mm. Round bullet quota expected: around ${quota} shots.
 
-BALLISTIC ANALYTICS:
+BALLISTIC ANALYTICS & TACTICAL COACHING REQUIREMENTS:
 - grouping_diameter_mm: The extreme spread / diameter in millimeters between the two farthest bullet holes.
 - directional_bias: One of ["centered", "top-left", "top-right", "bottom-left", "bottom-right", "top", "bottom", "left", "right"].
 - mean_point_of_impact_x: The average X coordinate percentage of all hits.
 - mean_point_of_impact_y: The average Y coordinate percentage of all hits.
+- analysis_summary: A detailed, professional Indonesian paragraph describing shot dispersion, grouping tightness, accuracy score, and shooter consistency tailored to ${weaponModel} in ${stance} stance.
+- tactical_advice: An array of 3 to 5 distinct, high-impact tactical advice strings in Indonesian that MUST include:
+  1. Biomechanical error diagnosis explaining the root anatomical cause based on directional_bias (e.g., bottom-left indicates trigger jerking/flinching, bottom-right indicates thumbing or wrist drop, top-left indicates recoil pushing anticipation, heeling indicates heel of palm push, canting indicates tilted barrel).
+  2. WEAPON-SPECIFIC coaching specifically tailored to ${weaponModel} (${weaponKind}):
+     * If Pistol (e.g. Pindad G2 Elite/Combat, Glock, Sig Sauer 9mm): address sight radius sensitivity (short barrel), 60-70% support-hand clamping vs 30-40% firing hand, proper placement of trigger finger distal phalanx, avoiding milking/flinching, and utilizing the trigger reset click.
+     * If Senapan Serbu / Assault Rifle (e.g. Pindad SS2-V1/V2/V4, SS1, M16 5.56mm): address consistent cheek-weld on comb stock, firm shoulder-pocket seating against 5.56mm recoil, handguard support without touching magazine, and natural respiratory pause.
+     * If Senapan Runduk / Sniper (e.g. Pindad SPR-2/3, DMR): address optical parallax elimination, Natural Point of Aim (NPOA), monopod/bipod stability, and smooth break on trigger wall.
+     * If Submachine Gun / SMG (e.g. Pindad PM2, MP5): address stock extension to shoulder, controlled burst fire, and muzzle climb compensation.
+  3. STANCE-SPECIFIC guidance tailored to ${stance} (e.g., Prone elbow pyramid & abdominal breathing; Standing athletic forward lean & wobble zone management; Kneeling bone support).
+  4. Specific recommended remedial drill (e.g. Ball & Dummy Drill, Dry-Fire Wall Drill, Coin on Front Sight Drill, or Trigger Reset Cadence Drill).
 
 OUTPUT FORMAT REQUIREMENTS:
 Output strictly a valid JSON object without markdown formatting, code fences, or extra commentary.
@@ -434,10 +469,12 @@ The JSON must adhere to this exact structure:
   "directional_bias": "top-right",
   "mean_point_of_impact_x": 51.2,
   "mean_point_of_impact_y": 48.7,
-  "analysis_summary": "Perkenaan tembakan sangat rapat di zona 9 dan 10 dengan bias tipis ke kanan atas.",
+  "analysis_summary": "Hasil tembakan 10 butir menggunakan Pindad G2 Combat posisi Berdiri sangat rapat di zona 9 dan 10 dengan bias tipis ke kanan atas.",
   "tactical_advice": [
-    "Koreksi Tumit Telapak Tangan: Hindari menekan bagian bawah pegangan ke depan saat hentakan.",
-    "Pertahankan ritme penarikan picu yang stabil dan bertahap."
+    "Koreksi Tumit Telapak Tangan (Heeling): Hindari menekan bagian bawah pegangan ke depan saat mengantisipasi hentakan.",
+    "Catatan Khusus Senjata [Pindad G2 Combat]: Terapkan pembagian cengkeraman 70% tangan penopang dan 30% tangan penembak untuk meredam sentakan 9mm, serta manfaatkan trigger reset point untuk tembakan lanjutan.",
+    "Optimasi Sikap Berdiri: Condongkan badan sedikit ke depan (athletic forward lean) untuk menjaga keseimbangan poros bahu.",
+    "Latihan Remedial yang Direkomendasikan: 'Ball & Dummy Drill' dan 'Wall Drill' untuk memantapkan konsistensi tarikan picu."
   ]
 }`;
 
@@ -646,7 +683,22 @@ export const detectTargetViaGemini = async (
   ) {
     saranList = rawGeminiResult.tactical_advice;
   } else {
-    saranList = generateTacticalAdvice(rawBias, groupingDiameterMm, accuracyPercent);
+    saranList = generateTacticalAdvice(
+      rawBias,
+      groupingDiameterMm,
+      accuracyPercent,
+      {
+        model_senjata:
+          metadata.modelSenjata || metadata.model_senjata || metadata.weapon_name,
+        nama_jenis_senjata:
+          metadata.jenisSenjata ||
+          metadata.nama_jenis_senjata ||
+          metadata.weapon_type,
+        kaliber: metadata.kaliber,
+        pabrikan: metadata.pabrikan,
+      },
+      metadata.sikapMenembak || metadata.nama_sikap_menembak || metadata.stance
+    );
   }
 
   // 5. Generate Citra Beranotasi Menggunakan Client-Side Canvas
